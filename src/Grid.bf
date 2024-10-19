@@ -48,7 +48,6 @@ public class Grid2<T> {
 			raw[i] = f(raw[i]);
 	}
 
-
 	public T GetPoint(float2 a) {
 		return this[ClipToScreen(a)];
 	}

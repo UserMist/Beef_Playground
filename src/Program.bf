@@ -4,6 +4,11 @@ using System.Collections;
 using static System.Math;
 namespace Playground_Lines;
 
+//Philosophy:
+
+//Struct constructors define values
+//Class constructors only define how much data they need to allocate
+
 struct Tracer {
 	public float3? p;
 
@@ -22,6 +27,28 @@ class Program
 	}
 	
 	public static void Main() {
+		SplitBuffer buff = new .(128, (typeof(float), "x"), (typeof(int), "y"));
+		defer delete buff;
+		buff..Add()..Add();
+		buff.Set("x", buff.count-1, 0.515f);
+		buff.Set("y", buff.count-1, 51512);
+		buff..MarkForRemoval(0)..Refresh();
+
+		RecordArchetype ur = scope .();
+		ur.chunks.Add(buff);
+
+		ur.For<float, "x", int, "y">(scope (x, y) => {
+			Console.WriteLine(x);
+			Console.WriteLine(y);
+		});
+
+		RecordSet r = scope .();
+		r.uniforms.Add(ur);
+		r.For<float, "x", int, "y">(scope (x, y) => {
+			Console.WriteLine(x);
+			Console.WriteLine(y);
+		}, scope (u) => u.Require("x"));
+
 		let seed = 15;
 		for (let i < 1) {
 			rng = scope .(seed);
@@ -78,17 +105,24 @@ class Program
 			}
 		}
 
-		var frameMin = float3(float.PositiveInfinity, float.PositiveInfinity, 0);
-		var frameMax = float3(float.NegativeInfinity, float.NegativeInfinity, 0);
+		var boxMin = float3(float.PositiveInfinity, float.PositiveInfinity, 0);
+		var boxMax = float3(float.NegativeInfinity, float.NegativeInfinity, 0);
 
 		for (let traj in trajectories) for (let trajDot in traj) {
 			if (trajDot.pos.x.IsNaN || trajDot.pos.y.IsNaN || trajDot.pos.z.IsNaN) continue;
-			frameMin = Min(frameMin, trajDot.pos);
-			frameMax = Max(frameMax, trajDot.pos);
+			boxMin = Min(boxMin, trajDot.pos);
+			boxMax = Max(boxMax, trajDot.pos);
 		}
 
 		int maxTrajLength = 0;
 		for (let traj in trajectories) maxTrajLength = Max(maxTrajLength, traj.Count);
+
+		let sizes = (boxMax-boxMin) * 0.5f;
+		let origin = (boxMax+boxMin) * 0.5f;
+		let size = Max(sizes.x, sizes.y, sizes.z);
+		let aspect = size*(float2(img.width/img.height, 1) - .All(0.1f));
+		boxMin = origin - aspect;
+		boxMax = origin - aspect;
 
 		const float m = 0.999f; //exp(-a*dt)
 		for (let i < maxTrajLength) {
@@ -99,7 +133,7 @@ class Program
 				let trajDot = trajectories[j][i];
 
 				let bias = 0.1f;
-				let ppos = remap(trajDot.pos, frameMin, frameMax, .(-1+bias, -1+bias, -0.001f), .(1-bias, 1-bias, +0.001f));
+				let ppos = remap(trajDot.pos, boxMin, boxMax, .All(-1), .All(1));
 				tracers[j].supply(img, .((.)ppos.x, (.)ppos.y), (trajDot.vel + .(0.5f, 0.5f, 0))*1f);
 			}
 		}
