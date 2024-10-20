@@ -2,28 +2,28 @@ using static System.Math;
 namespace Playground_Lines;
 
 public class Grid2<T> {
-	public int width => raw.GetLength(1);
-	public int height => raw.GetLength(0);
-	public T[,] raw ~ delete _;
+	public int width => cells.GetLength(1);
+	public int height => cells.GetLength(0);
+	public T[,] cells ~ delete _;
 
 	public this(int width, int height) {
-		raw = new .[height, width];
+		cells = new .[height, width];
 	}
 
 	public T this[int rawX, int rawY] {
-		get => raw[rawY, rawX];
-		set => raw[rawY, rawX] = value;
+		get => cells[rawY, rawX];
+		set => cells[rawY, rawX] = value;
 	}
 
 	public T this[int2 rawXY] {
-		get => raw[rawXY.y, rawXY.x];
-		set => raw[rawXY.y, rawXY.x] = value;
+		get => cells[rawXY.y, rawXY.x];
+		set => cells[rawXY.y, rawXY.x] = value;
 	}
 
 	public void Reset(T value) {
-		let c = raw.Count;
+		let c = cells.Count;
 		for (let i < c)
-			raw[i] = value;
+			cells[i] = value;
 	}
 
 	public void Set(Grid2<T> image) {
@@ -40,14 +40,17 @@ public class Grid2<T> {
 	}
 
 	public void Map(function T(T value) f) {
-		let c = raw.Count;
+		let c = cells.Count;
 		for (let i < c)
-			raw[i] = f(raw[i]);
+			cells[i] = f(cells[i]);
 	}
 
 	public T GetPoint(float2 a) {
 		return this[ClipToScreen(a)];
 	}
+
+	const System.StringView sv = "this[a] = color;";
+
 
 	/// Uses Bresenham's algorithm
 	public void DrawLine(float3 a, float3 b, T value) {
@@ -65,9 +68,10 @@ public class Grid2<T> {
 			let aClip = a + dir*Max(minDist, 0);
 			let bClip = a + dir*Min(maxDist, length);
 			if (aClip.x.IsNaN || aClip.y.IsNaN) return;
-			drawLineUnsafe(ClipToScreen((.) aClip), ClipToScreen((.) bClip), value);
+			drawLineUnsafe<const sv>(ClipToScreen((.) aClip), ClipToScreen((.) bClip), value);
 		}
 	}
+
 	
 	public void DrawPoint(float3 a, T value) {
 		if (a.x > +1 || a.x < -1 || a.y > +1 || a.y < -1 || a.z > +1 || a.z < -1 ) {
@@ -93,7 +97,7 @@ public class Grid2<T> {
 		return p2 -= .All(1);
 	}
 
-	private void drawLineUnsafe(int2 a, int2 b, T color) {
+	private void drawLineUnsafe<S>(int2 a, int2 b, T color) where S: const System.StringView {
 		let dx = Abs(b.x - a.x);
 		let dy = -Abs(b.y - a.y);
 		let sx = (a.x < b.x)? 1 : -1;
@@ -102,7 +106,7 @@ public class Grid2<T> {
 		var a;
 		var e = dx + dy;
 		while (true) {
-			this[a] = color;
+			System.Compiler.Mixin(S);
 
 			if (a == b) break;
 			let e2 = 2*e;

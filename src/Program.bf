@@ -26,7 +26,7 @@ class Program : SDLApp
 	Grid2<float3> img = new .(w,h) ~ delete _;
 	SDL.Surface* sdlSurface ~ SDL.FreeSurface(_);
 	SDL2.Image sdlImage ~ delete _;
-	ISim sim = new Sim1() ~ delete _;
+	ISim sim = new Sim0() ~ delete _;
 
 	public this(): base() {}
 
@@ -36,7 +36,7 @@ class Program : SDLApp
 		mWidth = w;
 		mHeight = h;
 
-		sdlSurface = SDL.CreateRGBSurfaceWithFormatFrom(finalImg.raw.Ptr, (.)finalImg.width, (.)finalImg.height, 24, (.)finalImg.width * 3, SDL.PIXELFORMAT_RGB24);
+		sdlSurface = SDL.CreateRGBSurfaceWithFormatFrom(finalImg.cells.Ptr, (.)finalImg.width, (.)finalImg.height, 24, (.)finalImg.width * 3, SDL.PIXELFORMAT_RGB24);
 		sdlImage = new .() {
 			mWidth = (.)finalImg.width,
 			mHeight = (.)finalImg.height
@@ -48,7 +48,7 @@ class Program : SDLApp
 		sim.OnFrame(float(watch.ElapsedMilliseconds)/1000, img);
 		watch.Restart();
 
-		Assets.FinalizeRGB24(.(img.raw.Ptr, img.raw.Count), finalImg.raw.Ptr);
+		Assets.FinalizeRGB24(.(img.cells.Ptr, img.cells.Count), finalImg.cells.Ptr);
 		sdlImage.mTexture = SDL.CreateTextureFromSurface(mRenderer, sdlSurface); defer SDL.DestroyTexture(sdlImage.mTexture);
 		Draw(sdlImage, 0, 0);
 	}

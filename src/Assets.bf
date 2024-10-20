@@ -26,6 +26,6 @@ class Assets {
 		header[16] = 24;
 		header[17] = alphaDepth | (fromRight? 16:0) | (fromBottom? 0:32);
 		file.Write(header);
-		file.Write(StringView((.)rgb.raw.Ptr, 3*rgb.raw.Count));
+		file.Write(StringView((.)rgb.cells.Ptr, 3*rgb.cells.Count));
 	}
 }
