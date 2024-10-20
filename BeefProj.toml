@@ -1,7 +1,9 @@
 FileVersion = 1
+Dependencies = {corlib = "*", SDL2 = "*"}
 
 [Project]
 Name = "Playground_Lines"
+TargetType = "BeefGUIApplication"
 StartupObject = "Playground_Lines.Program"
 
 [[ProjectFolder.Items]]
