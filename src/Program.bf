@@ -9,16 +9,6 @@ namespace Playground_Lines;
 //Struct constructors define values
 //Class constructors only define how much data they need to allocate
 
-struct Tracer {
-	public float3? p;
-
-	public void supply<T>(Grid2<T> img, float3 p2, T col) mut {
-		if (p.HasValue)
-			img.DrawLine(p.ValueOrDefault, p2, col);
-		p = p2;
-	}
-}
-
 class Program
 {
 	static Random rng;
@@ -27,27 +17,19 @@ class Program
 	}
 	
 	public static void Main() {
-		SplitBuffer buff = new .(128, (typeof(float), "x"), (typeof(int), "y"));
-		defer delete buff;
-		buff..Add()..Add();
-		buff.Set("x", buff.count-1, 0.515f);
-		buff.Set("y", buff.count-1, 51512);
-		buff..MarkForRemoval(0)..Refresh();
+		RecordTable ur = new .((typeof(float), "x"), (typeof(int), "y")); defer delete ur;
+		let a = ur.AddLater(.Create("x", 0.515f), .Create("y", 515512));
+		let b = ur.AddLater(.Create("x", 35f), .Create("y", 45));
 
-		RecordArchetype ur = scope .();
-		ur.chunks.Add(buff);
+		ur..RemoveLater(a)..Refresh();
 
-		ur.For<float, "x", int, "y">(scope (x, y) => {
-			Console.WriteLine(x);
-			Console.WriteLine(y);
-		});
+		RecordStorage r = scope .();
+		r.tables.Add(ur);
 
-		RecordSet r = scope .();
-		r.uniforms.Add(ur);
 		r.For<float, "x", int, "y">(scope (x, y) => {
 			Console.WriteLine(x);
 			Console.WriteLine(y);
-		}, scope (u) => u.Require("x"));
+		}, scope (u) => u.HasFields("x") && u.MissesFields());
 
 		let seed = 15;
 		for (let i < 1) {
@@ -74,14 +56,14 @@ class Program
 			img[i, j] *= 0.5f;
 		}
 
-		List<Tracer> tracers = scope .();
+		//List<Tracer> tracers = scope .();
 		List<float3> p = scope .();
 		List<float3> v = scope .();
 
 		List<List<(float3 pos, float3 vel)>> trajectories = new .(); defer {DeleteContainerAndItems!(trajectories);}
 
 		for (let i < 3) {
-			tracers.Add(.());
+			//tracers.Add(.());
 			p.Add(.(rand(), rand(), rand() * 0.01f)*0.5f);
 			v.Add(.(rand(), rand(), rand() * 0.01f)*0.4f);
 			trajectories.Add(new .());
@@ -134,7 +116,7 @@ class Program
 
 				let bias = 0.1f;
 				let ppos = remap(trajDot.pos, boxMin, boxMax, .All(-1), .All(1));
-				tracers[j].supply(img, .((.)ppos.x, (.)ppos.y), (trajDot.vel + .(0.5f, 0.5f, 0))*1f);
+				//tracers[j].supply(img, .((.)ppos.x, (.)ppos.y), (trajDot.vel + .(0.5f, 0.5f, 0))*1f);
 			}
 		}
 		

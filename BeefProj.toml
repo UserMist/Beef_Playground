@@ -3,3 +3,11 @@ FileVersion = 1
 [Project]
 Name = "Playground_Lines"
 StartupObject = "Playground_Lines.Program"
+
+[[ProjectFolder.Items]]
+Type = "AutoFolder"
+Name = "ECS"
+
+[[ProjectFolder.Items.Items]]
+Type = "IgnoreSource"
+Name = "FieldDef.bf"
