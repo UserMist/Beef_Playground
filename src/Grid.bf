@@ -2,24 +2,22 @@ using static System.Math;
 namespace Playground_Lines;
 
 public class Grid2<T> {
-	public int width;
-	public int height;
-	public T[] raw ~ delete _;
+	public int width => raw.GetLength(1);
+	public int height => raw.GetLength(0);
+	public T[,] raw ~ delete _;
 
 	public this(int width, int height) {
-		this.width = width;
-		this.height = height;
-		raw = new .[width*height];
+		raw = new .[height, width];
 	}
 
 	public T this[int rawX, int rawY] {
-		get => raw[rawX + rawY*width];
-		set => raw[rawX + rawY*width] = value;
+		get => raw[rawY, rawX];
+		set => raw[rawY, rawX] = value;
 	}
 
 	public T this[int2 rawXY] {
-		get => raw[rawXY.x + rawXY.y*width];
-		set => raw[rawXY.x + rawXY.y*width] = value;
+		get => raw[rawXY.y, rawXY.x];
+		set => raw[rawXY.y, rawXY.x] = value;
 	}
 
 	public void Reset(T value) {
@@ -29,9 +27,8 @@ public class Grid2<T> {
 	}
 
 	public void Set(Grid2<T> image) {
-		width = image.width;
-		height = image.height;
-		image.raw.CopyTo(raw = new .[image.raw.Count]);
+		//image.array.CopyTo(array = new .[image.array.Count]);
+		ThrowUnimplemented();
 	}
 
 	public void CopyTo(Grid2<T> that, int2 atRaw = .(0, 0)) {
@@ -54,7 +51,6 @@ public class Grid2<T> {
 
 	/// Uses Bresenham's algorithm
 	public void DrawLine(float3 a, float3 b, T value) {
-
 		if (ClipToScreen((.) b) == ClipToScreen((.) a)) {
 			DrawPoint(a, value);
 			return;
