@@ -81,35 +81,24 @@ class FieldBuffer
 
 	public void Set<T>(int idx, String name, T value) where T: struct {
 		using (var v = Variant.Create(value)) {
-			Runtime.Assert(idx < count && setAtIdx(idx, name, v), "Index is out of range");
+			Runtime.Assert(idx < count, "Index is out of range");
+			setAtIdx(idx, name, v);
 		}
 	}
 
 	public void Set(int idx, params FieldValue[] values) {
+		Runtime.Assert(idx < count, "Index is out of range");
 		for (let value in values) {
 			setAtIdx(idx, value.name, value.value);
 		}
 	}
 
-	private bool setAtIdx(int idx, String name, Variant value) {
+	private void setAtIdx(int idx, String name, Variant value) {
 		let type = value.VariantType;
-		if (FieldData.TryGetValue(name, let info)) {
-			if (info.type == type) {
-				let stride = type.Stride;
-				let localOffset = idx*stride;
-				let endPos = localOffset + stride;
-				if (endPos <= info.length) {
-					let toPtr = (void*)(info.offset + localOffset + (int)(void*)raw.Ptr);
-					//doesn't need zeroing out, since we don't touch space between strides 
-					Internal.MemSet(toPtr, 0, type.Stride);
-					value.CopyValueData(toPtr);
-					return true;
-				}
-				return false;
-			}
-			Runtime.FatalError(scope $"Field \"{name}\" requires type {type.GetName(..scope .())} instead of {info.type.GetName(..scope .())}");
-		}
-		Runtime.FatalError(scope $"Field \"{type.GetName(..scope .())}\" not found");
+		if (!FieldData.TryGetValue(name, let info)) Runtime.FatalError(scope $"Field \"{type.GetName(..scope .())}\" not found");
+		if (info.type != type) Runtime.FatalError(scope $"Field \"{name}\" requires type {type.GetName(..scope .())} instead of {info.type.GetName(..scope .())}");
+
+		value.CopyValueData((void*)(info.offset + idx*type.Stride + (int)(void*)raw.Ptr));
 	}
 
 	public void Refresh(bool removalQueueIsSorted = false) {
