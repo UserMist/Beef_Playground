@@ -1,10 +1,15 @@
+using System;
 using static System.Math;
-namespace Playground_Lines;
+namespace Playground;
 
 public class Grid2<T> {
-	public int width => cells.GetLength(1);
-	public int height => cells.GetLength(0);
+	[Inline] public int width => cells.GetLength(1);
+	[Inline] public int height => cells.GetLength(0);
 	public T[,] cells ~ delete _;
+
+	public this(int2 wh) {
+		cells = new .[wh.y, wh.x];
+	}
 
 	public this(int width, int height) {
 		cells = new .[height, width];
@@ -49,7 +54,7 @@ public class Grid2<T> {
 		return this[ClipToScreen(a)];
 	}
 
-	const System.StringView sv = "this[a] = color;";
+	const String sv = "this[a] = color;";
 
 
 	/// Uses Bresenham's algorithm
@@ -68,10 +73,9 @@ public class Grid2<T> {
 			let aClip = a + dir*Max(minDist, 0);
 			let bClip = a + dir*Min(maxDist, length);
 			if (aClip.x.IsNaN || aClip.y.IsNaN) return;
-			drawLineUnsafe<const sv>(ClipToScreen((.) aClip), ClipToScreen((.) bClip), value);
+			drawLineUnsafe(ClipToScreen((.) aClip), ClipToScreen((.) bClip), value);
 		}
 	}
-
 	
 	public void DrawPoint(float3 a, T value) {
 		if (a.x > +1 || a.x < -1 || a.y > +1 || a.y < -1 || a.z > +1 || a.z < -1 ) {
@@ -83,6 +87,7 @@ public class Grid2<T> {
 
 	public int2 ClipToScreen(float2 p) {
 		var p;
+		p.y = -p.y;
 		p += .All(1);
 		p *= .(width - 1, height - 1);
 		p *= 0.5f;
@@ -94,10 +99,12 @@ public class Grid2<T> {
 		p *= 2;
 		var p2 = (float2) p;
 		p2 /= .(width - 1, height - 1);
-		return p2 -= .All(1);
+		p2 -= .All(1);
+		p2.y = -p.y;
+		return p2;
 	}
 
-	private void drawLineUnsafe<S>(int2 a, int2 b, T color) where S: const System.StringView {
+	private void drawLineUnsafe(int2 a, int2 b, T color) {
 		let dx = Abs(b.x - a.x);
 		let dy = -Abs(b.y - a.y);
 		let sx = (a.x < b.x)? 1 : -1;
@@ -106,7 +113,7 @@ public class Grid2<T> {
 		var a;
 		var e = dx + dy;
 		while (true) {
-			System.Compiler.Mixin(S);
+			this[a] = color;
 
 			if (a == b) break;
 			let e2 = 2*e;

@@ -1,5 +1,6 @@
 FileVersion = 1
-Projects = {Playground_Lines = {Path = "."}}
+Projects = {Playground = {Path = "."}, SDL2 = "*"}
+Unlocked = ["corlib"]
 
 [Workspace]
-StartupProject = "Playground_Lines"
+StartupProject = "Playground"

@@ -1,15 +1,15 @@
 using System;
 using System.Collections;
-namespace Playground_Lines;
+namespace Playground;
 
 ///Collection of records of same field composition. Each record holds a primary key (field name - "RECORD_ID") and a bunch of other fields.
 class RecordTable
 {
 	const int for_maxVariadicLength = 12;
 
-	private List<FieldBuffer> chunks;
-	private Dictionary<RecordId, (int, int)> indexing;
-	private (Type type, StringView fieldName)[] fields;
+	private List<RecordList> chunks;
+	private Dictionary<RecordID, (int, int)> indexing;
+	private (Type type, StringView fieldName)[] fields ~ delete _;
 
 	public ~this() {
 		DeleteContainerAndItems!(chunks);
@@ -24,21 +24,20 @@ class RecordTable
 
 	public this(int capacityPerChunk, params (Type type, StringView fieldName)[] fields) {
 		initFields(fields);
-		chunks = new .(1)..Add(new .(capacityPerChunk, params fields));
+		chunks = new .(1)..Add(new .(capacityPerChunk, params this.fields));
 		indexing = new .(32);
 	}
 
 	private void initFields((Type type, StringView fieldName)[] fields) {
 		this.fields = new .[fields.Count+1];
-		this.fields[0] = (typeof(RecordId), RecordId.FieldKey);
+		this.fields[0] = (typeof(RecordID), RecordID.FieldKey);
 		fields.CopyTo(this.fields, 0, 1, fields.Count);
 	}
 
-	public RecordId AddLater(params FieldValue[] values) {
-		let id = RecordId();
-		FieldValue[] realValues = scope .[values.Count + 1];
-		realValues[0] = .Create(RecordId.FieldKey, id);
-		values.CopyTo(realValues, 0, 1, values.Count);
+	public RecordID AddLater(params FieldValue[] values) {
+		let id = RecordID();
+		FieldValue[] realValues = populate(..scope FieldValue[values.Count + 1], values, id);
+		defer {for (var v in realValues) v.Dispose();}
 
 		for (let chunk in chunks) {
 			if (chunk.AddLater(params realValues)) {
@@ -53,7 +52,12 @@ class RecordTable
 		return id;
 	}
 
-	public bool RemoveLater(RecordId id) {
+	private void populate(FieldValue[] realValues, FieldValue[] values, RecordID id) {
+		realValues[0] = .Create(RecordID.FieldKey, id);
+		values.CopyTo(realValues, 0, 1, values.Count);
+	}
+
+	public bool RemoveLater(RecordID id) {
 		if (indexing.TryGetValue(id, let k)) {
 			chunks[k.0].RemoveLater(k.1);
 			return true;
@@ -65,7 +69,7 @@ class RecordTable
 		for (let chunkIdx < chunks.Count) {
 			let chunk = chunks[chunkIdx];
 
-			let idSpan = chunk.Span<RecordId>(RecordId.FieldKey);
+			let idSpan = chunk.Span<RecordID>(RecordID.FieldKey);
 			for (let k1 in chunk.[Friend]removalQueue) {
 				indexing.Remove(idSpan[k1]);
 			}
@@ -164,8 +168,8 @@ class RecordTable
 		String delegateGenericArgs = new .();
 
 		if (includeEntId) {
-			delegateArgs += scope $"in {nameof(RecordId)} entId";
-			spanInits += scope $"\n\t\t\tlet entIds = chunk.Span<{nameof(RecordId)}>(RecordId.FieldKey);";
+			delegateArgs += scope $"in {nameof(RecordID)} entId";
+			spanInits += scope $"\n\t\t\tlet entIds = chunk.Span<{nameof(RecordID)}>(RecordID.FieldKey);";
 			spanArgs += "entIds[i]";
 		}
 
@@ -190,6 +194,11 @@ class RecordTable
 		if (!genericArgs.IsEmpty) {
 			genericArgs..Insert(0, '<')..Append('>');
 			delegateGenericArgs..Insert(0, '<')..Append('>');
+		}
+
+		if (includeEntId) {
+			genericArgs.Insert(0, "Ids");
+			delegateGenericArgs.Insert(0, "Ids");
 		}
 
 		return (genericArgs, delegateArgs, constraints, spanInits, spanArgs, delegateGenericArgs);

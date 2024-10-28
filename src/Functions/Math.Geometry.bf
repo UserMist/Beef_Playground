@@ -1,5 +1,5 @@
 using static System.Math;
-namespace Playground_Lines;
+namespace Playground;
 
 class ShapeTools
 {

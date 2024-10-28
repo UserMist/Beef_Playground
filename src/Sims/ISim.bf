@@ -1,7 +1,8 @@
-namespace Playground_Lines;
+namespace Playground;
 
 interface ISim
 {
-	public void OnFrame(float dt, Grid2<float3> image) {}
-	public void OnTick(float dt) {}
+	public void DrawFrame(float dt, Grid2<float3> image) {}
+	public void Advance(float dt) {}
+	public void Act(SDL2.SDL.KeyboardEvent event) {}
 }

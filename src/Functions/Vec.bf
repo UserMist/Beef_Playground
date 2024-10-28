@@ -1,5 +1,5 @@
 using System;
-namespace Playground_Lines;
+namespace Playground;
 
 struct Vec2<T>: this(T x, T y) where T: operator T+T, operator T-T, operator T*T, operator T/T {
 	[Commutable] public static Self operator +(Self a, Self b) => .(a.x+b.x, a.y+b.y);

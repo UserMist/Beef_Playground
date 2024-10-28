@@ -2,14 +2,8 @@ FileVersion = 1
 Dependencies = {corlib = "*", SDL2 = "*"}
 
 [Project]
-Name = "Playground_Lines"
-TargetType = "BeefGUIApplication"
-StartupObject = "Playground_Lines.Program"
+Name = "Playground"
+StartupObject = "Playground.Program"
 
-[[ProjectFolder.Items]]
-Type = "AutoFolder"
-Name = "ECS"
-
-[[ProjectFolder.Items.Items]]
-Type = "IgnoreSource"
-Name = "FieldDef.bf"
+[Configs.Release.Win64]
+OptimizationLevel = "O3"

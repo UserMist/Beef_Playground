@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
-namespace Playground_Lines;
+namespace Playground;
 
 ///Collection of records of various compositions. Each record holds a primary key (field name - "RECORD_ID") and a bunch of other fields.
-class RecordStorage
+class RecordDomain
 {
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
 

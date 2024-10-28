@@ -1,11 +1,10 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-namespace Playground_Lines;
+namespace Playground;
 
 ///SoA for arbitrary data. Allows addition (up to a limit) and marking for removal (finished after refresh).
-///TODO: Look into possibility of zero-tick actions due to timing of addition and removal
-class FieldBuffer
+class RecordList
 {
 	public Dictionary<String, FieldSpanInfo> FieldData;
 
@@ -89,25 +88,26 @@ class FieldBuffer
 	public void Set(int idx, params FieldValue[] values) {
 		Runtime.Assert(idx < count, "Index is out of range");
 		for (let value in values) {
-			setAtIdx(idx, value.name, value.value);
+			setAtIdx(idx, value.key, value.value);
 		}
 	}
 
 	private void setAtIdx(int idx, String name, Variant value) {
 		let type = value.VariantType;
-		if (!FieldData.TryGetValue(name, let info)) Runtime.FatalError(scope $"Field \"{type.GetName(..scope .())}\" not found");
+		if (!FieldData.TryGetValue(name, let info)) Runtime.FatalError(scope $"Field \"{name}\" not found");
 		if (info.type != type) Runtime.FatalError(scope $"Field \"{name}\" requires type {type.GetName(..scope .())} instead of {info.type.GetName(..scope .())}");
 
 		value.CopyValueData((void*)(info.offset + idx*type.Stride + (int)(void*)raw.Ptr));
 	}
 
 	public void Refresh(bool removalQueueIsSorted = false) {
-		executeRemovals(removalQueueIsSorted);
+		executeRefresh(removalQueueIsSorted);
 	}
 
-	private void executeRemovals(bool queueIsSorted) {
+	private void executeRefresh(bool queueIsSorted) {
 		let deletedAmount = removalQueue.Count;
 		if (deletedAmount == 0) {
+			Count = count;
 			return;
 		}
 
