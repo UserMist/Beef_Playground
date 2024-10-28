@@ -2,64 +2,64 @@ using System;
 using System.Collections;
 namespace Playground;
 
-///Collection of records of same field composition. Each record holds a primary key (field name - "RECORD_ID") and a bunch of other fields.
-class RecordTable
+/// A subset of RecordDomain. All records in it have same composition.
+public class RecordTable
 {
 	const int for_maxVariadicLength = 12;
-
+	
+	private ComponentType[] header ~ delete _;
 	private List<RecordList> chunks;
-	private Dictionary<RecordID, (int, int)> indexing;
-	private (Type type, StringView fieldName)[] fields ~ delete _;
+	private Dictionary<RecordId, (int, int)> indexing;
 
 	public ~this() {
 		DeleteContainerAndItems!(chunks);
 		delete indexing;
 	}
 
-	public this(params (Type type, StringView fieldName)[] fields) {
-		initFields(fields);
-		chunks = new .(1)..Add(new .(64, params this.fields));
+	public this(params ComponentType[] header) {
+		initFields(header);
+		chunks = new .(1)..Add(new .(64, params this.header));
 		indexing = new .(32);
 	}
 
-	public this(int capacityPerChunk, params (Type type, StringView fieldName)[] fields) {
-		initFields(fields);
-		chunks = new .(1)..Add(new .(capacityPerChunk, params this.fields));
+	public this(int capacityPerChunk, params ComponentType[] header) {
+		initFields(header);
+		chunks = new .(1)..Add(new .(capacityPerChunk, params this.header));
 		indexing = new .(32);
 	}
 
-	private void initFields((Type type, StringView fieldName)[] fields) {
-		this.fields = new .[fields.Count+1];
-		this.fields[0] = (typeof(RecordID), RecordID.FieldKey);
-		fields.CopyTo(this.fields, 0, 1, fields.Count);
+	private void initFields(ComponentType[] header) {
+		this.header = new .[header.Count+1];
+		this.header[0] = .Create<RecordId>();
+		header.CopyTo(this.header, 0, 1, header.Count);
 	}
 
-	public RecordID AddLater(params FieldValue[] values) {
-		let id = RecordID();
-		FieldValue[] realValues = populate(..scope FieldValue[values.Count + 1], values, id);
+	public RecordId AddLater(params Component[] components) {
+		let id = RecordId();
+		Component[] realValues = populate(..scope Component[components.Count + 1], components, id);
 		defer {for (var v in realValues) v.Dispose();}
 
 		for (let chunk in chunks) {
-			if (chunk.AddLater(params realValues)) {
+			if (chunk.MarkToAddWithoutResizing(params realValues)) {
 				indexing.Add(id, (@chunk.Index, chunk.[Friend]count-1));
 				return id;
 			}
 		}
 
 		let chunk = chunks.Add(..new .(chunks.Back.Capacity));
-		chunk.AddLater(params realValues);
+		chunk.MarkToAddWithoutResizing(params realValues);
 		indexing.Add(id, (chunks.Count-1, chunk.[Friend]count-1));
 		return id;
 	}
 
-	private void populate(FieldValue[] realValues, FieldValue[] values, RecordID id) {
-		realValues[0] = .Create(RecordID.FieldKey, id);
-		values.CopyTo(realValues, 0, 1, values.Count);
+	private void populate(Component[] realComponents, Component[] components, RecordId id) {
+		realComponents[0] = .Create(id);
+		components.CopyTo(realComponents, 0, 1, components.Count);
 	}
 
-	public bool RemoveLater(RecordID id) {
+	public bool RemoveLater(RecordId id) {
 		if (indexing.TryGetValue(id, let k)) {
-			chunks[k.0].RemoveLater(k.1);
+			chunks[k.0].MarkToRemove(k.1);
 			return true;
 		}
 		return false;
@@ -69,7 +69,7 @@ class RecordTable
 		for (let chunkIdx < chunks.Count) {
 			let chunk = chunks[chunkIdx];
 
-			let idSpan = chunk.Span<RecordID>(RecordID.FieldKey);
+			let idSpan = chunk.Span<RecordId>();
 			for (let k1 in chunk.[Friend]removalQueue) {
 				indexing.Remove(idSpan[k1]);
 			}
@@ -90,45 +90,14 @@ class RecordTable
 		ThrowUnimplemented();
 	}
 
-	public bool MatchStrictly(params String[] fields) {
-		let chunk = chunks[0];
+	public bool HasComponents(params IComponent.Id[] header)
+		=> chunks[0].HasComponents(params header);
 
-		if (chunk.FieldData.Count != fields.Count) {
-			return false;
-		}
-
-		for (let f in chunk.FieldData) {
-			var found = false;
-			for (let f2 in fields) {
-				if (f2 == f.key) {
-					found = true;
-					break;
-				}
-			}
-
-			if (!found)
-				return false;
-		}
-		return true;
-	}
-
-	public bool HasFields(params String[] fields) {
-		let chunk = chunks[0];
-		for (let f in fields) {
-			if (!chunk.HasField(f))
-				return false;
-		}
-		return true;
-	}
-
-	public bool MissesFields(params String[] fields) {
-		let chunk = chunks[0];
-		for (let f in fields) {
-			if (chunk.HasField(f))
-				return false;
-		}
-		return true;
-	}
+	public bool MissesFields(params IComponent.Id[] header)
+		=> chunks[0].MissesComponents(params header);
+	
+	public bool MatchesComponents(params IComponent.Id[] header)
+		=> chunks[0].MatchesComponents(params header);
 	
 	[OnCompile(.TypeInit), Comptime]
 	private static void for_variadic() {
@@ -159,18 +128,18 @@ class RecordTable
 	}
 
 	private static (String genericArgs, String delegateArgs, String constraints, String spanInits, String spanArgs, String delegateGenericArgs)
-	for_genStrings(bool includeEntId, int otherCount) {
+	for_genStrings(bool includeRecId, int otherCount) {
 		String genericArgs = new .();
 		String delegateArgs = new .();
 		String constraints = new .();
 		String spanInits = new .();
 		String spanArgs = new .();
 		String delegateGenericArgs = new .();
-
-		if (includeEntId) {
-			delegateArgs += scope $"in {nameof(RecordID)} entId";
-			spanInits += scope $"\n\t\t\tlet entIds = chunk.Span<{nameof(RecordID)}>(RecordID.FieldKey);";
-			spanArgs += "entIds[i]";
+		
+		if (includeRecId) {
+			delegateArgs += scope $"in RecordId recId";
+			spanInits += scope $"\n\t\t\tlet recIds = chunk.Span<RecordId>();";
+			spanArgs += "recIds[i]";
 		}
 
 		for (let n < otherCount) {
@@ -178,16 +147,17 @@ class RecordTable
 				genericArgs += ", ";
 				delegateGenericArgs += ", ";
 			}
-			if (n > 0 || includeEntId) {
+
+			if (n > 0 || includeRecId) {
 				delegateArgs += ", ";
 				spanArgs += ", ";
 			}
 
-			genericArgs += scope $"K{n},V{n}";
-			delegateGenericArgs += scope $"K{n}, const V{n}";
+			genericArgs += scope $"K{n}";
+			delegateGenericArgs += scope $"K{n}";
 			delegateArgs += scope $"ref K{n}";
-			constraints += scope $"\n\twhere V{n}: const String";
-			spanInits += scope $"\n\t\t\tlet span{n} = chunk.Span<K{n}>(V{n});";
+			constraints += scope $"\n\twhere K{n}: IComponent";
+			spanInits += scope $"\n\t\t\tlet span{n} = chunk.Span<K{n}>();";
 			spanArgs += scope $"ref span{n}[i]";
 		}
 
@@ -196,10 +166,10 @@ class RecordTable
 			delegateGenericArgs..Insert(0, '<')..Append('>');
 		}
 
-		if (includeEntId) {
+		/*if (includeRecId) {
 			genericArgs.Insert(0, "Ids");
 			delegateGenericArgs.Insert(0, "Ids");
-		}
+		}*/
 
 		return (genericArgs, delegateArgs, constraints, spanInits, spanArgs, delegateGenericArgs);
 	}

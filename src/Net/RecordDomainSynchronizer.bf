@@ -21,12 +21,12 @@ class RecordDomainUploader
 	public struct Explanation: IHashable
 	{
 		public Header header;
-		public RecordID recordID;
+		public RecordId RecordId;
 		public RecordInfo recordInfo;
 
 		public enum RecordInfo {
 			case DoesntExist;
-			case Update(uint8 packetIdx, uint8 packetAmount, bool allFields, (String name, String value)[] assignments);
+			case Update(uint8 packetIdx, uint8 packetAmount, bool allFields, (IComponent.Id compId, String value)[] assignments);
 			case SyncChecker(int64 hash); //to compensate for bad hashing, 1% of SymcCheckers should be randomly replaced with other cases
 		}
 
@@ -66,8 +66,8 @@ class RecordDomainUploader
 		let msgHeaderPtr = (Explanation.Header*)bytes.Ptr;
 		bytes.Append((char8*)&msgHeader, sizeof(Explanation.Header));
 
-		var recordID = msg.recordID;
-		bytes.Append((char8*)&recordID, sizeof(RecordID));
+		var RecordId = msg.RecordId;
+		bytes.Append((char8*)&RecordId, sizeof(RecordId));
 
 		switch (msg.recordInfo) {
 		  case .DoesntExist:
@@ -135,9 +135,8 @@ class RecordDomainDownloader
 		case Update(bool allFields, uint8 done, uint8 outOf);
 	}
 
-	public List<(RecordID,int)> syncQueries; 
-	public List<(RecordID,int)> failedSyncQueries; 
-	public Dictionary<RecordID, (NetTick tick, uint8 updates)> lastUpdatedRecords; //used to build recordsToQuery, and to determine if 
+	public List<(RecordId, int)> syncQueries; 
+	public Dictionary<RecordId, (NetTick tick, uint8 updates)> lastUpdatedRecords; //used to build recordsToQuery, and to determine if 
 	public List<RecordDomainUploader.Explanation.Header> knownMessages;
 	public List<RecordDomainUploader.Explanation.Header> messagesToAcknowledge;
 
@@ -150,7 +149,7 @@ class RecordDomainDownloader
 		
 		RecordDomainUploader.Explanation ret = ?;
 		knownMessages.Add(ret.header = header);
-		ret.recordID = read<RecordID>(src, &pos);
+		ret.RecordId = read<RecordId>(src, &pos);
 		switch (read<uint8>(src, &pos)) {
 		  case 0:
 			ret.recordInfo = .DoesntExist;

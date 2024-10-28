@@ -2,17 +2,17 @@ using System;
 using System.Collections;
 namespace Playground;
 
-///Collection of records of various compositions. Each record holds a primary key (field name - "RECORD_ID") and a bunch of other fields.
-class RecordDomain
+/// Collection of records with varying component compositions. Each record must hold at least a RecordId.
+public class RecordDomain
 {
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
 
-	public void ForUniformBuffer(delegate void(RecordTable) method) {
+	public void ForTables(delegate void(RecordTable) method) {
 		for (let table in tables)
 			method(table);
 	}
 
-	public void ForUniformBuffer(delegate void(RecordTable) method, delegate bool(RecordTable) selector) {
+	public void ForTables(delegate void(RecordTable) method, delegate bool(RecordTable) selector) {
 		for (let records in tables) {
 			if (selector(records))
 				method(records);
@@ -39,7 +39,7 @@ class RecordDomain
 
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} uniform) selector){g.constraints} {begin}
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector){g.constraints} {begin}
 					for (let table in tables)
 						if (selector(table))
 							table.For{g.delegateGenericArgs}(method);

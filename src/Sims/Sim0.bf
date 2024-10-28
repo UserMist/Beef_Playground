@@ -8,8 +8,8 @@ namespace Playground;
 
 class Sim0: ISim
 {
-	RecordTable particles = new .(80, (typeof(float3), "pos"), (typeof(float3), "oldPos"), (typeof(float3), "vel")) ~ delete _;
-	RecordID main;
+	RecordTable particles = new .(80, .Create<Pos3f>(), .Create<Vel3f>(), .Create<OldPos3f>()) ~ delete _;
+	RecordId main;
 
 	Random rng = new .(7) ~ delete _;
 	float rand() => .(rng.NextDouble()*2-1);
@@ -26,19 +26,19 @@ class Sim0: ISim
 		var avgV = float3(0,0);
 		var avgP = float3(0,0);
 
-		particles.For<float3,"pos",float3,"vel",float3,"oldPos">(scope [&](pos,vel,oldPos) => {
-			pos = .(rand(), rand(), rand() * 0.01f)*0.5f;
-			vel = .(rand(), rand(), rand() * 0.01f)*0.4f;
-			oldPos = pos;
-			avgV += vel;
+		particles.For<Pos3f,Vel3f,OldPos3f>(scope [&](pos,vel,oldPos) => {
+			pos.v = float3(rand(), rand(), rand() * 0.01f)*0.5f;
+			vel.v = float3(rand(), rand(), rand() * 0.01f)*0.4f;
+			oldPos.v = pos.v;
+			avgV += vel.v;
 		});
 
 		avgV /= n;
 		avgP /= n;
-		particles.For<float3,"pos",float3,"vel",float3,"oldPos">(scope (pos,vel,oldPos) => {
-			pos -= avgP;
-			oldPos -= avgP;
-			vel -= avgV;
+		particles.For<Pos3f,Vel3f,OldPos3f>(scope (pos,vel,oldPos) => {
+			pos.v -= avgP;
+			oldPos.v -= avgP;
+			vel.v -= avgV;
 		});
 
 		Console.WriteLine("Simulation is running");
@@ -58,14 +58,14 @@ class Sim0: ISim
 			cells[i] = Lerp(cells[i], .(0.05f,0.02f,0.03f), 0.04f);
 		}
 
-		particles.For<float3,"pos",float3,"vel",float3,"oldPos">(scope (pos,vel,oldPos) => {
-			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), vel*0.5f+.All(0.5f));
-			oldPos = pos;
+		particles.For<Pos3f,Vel3f,OldPos3f>(scope (pos,vel,oldPos) => {
+			image.DrawLine(pos.v*.(float(image.height)/image.width,1), oldPos.v*.(float(image.height)/image.width,1), vel.v*0.5f+.All(0.5f));
+			oldPos.v = pos.v;
 
 			/*let r = 0.04f;
 			for (let j < image.height) {
 				for (let i < image.width) {
-					let dp = image.ScreenToClip(.(i, j)) - p[i0];
+					let dp = image.ScrerecoClip(.(i, j)) - p[i0];
 					let len2 = (dp.x*dp.x + dp.y*dp.y);
 
 					if (len2 < r*r) {
@@ -77,25 +77,25 @@ class Sim0: ISim
 	}
 
 	void ISim.Advance(float dt) {
-		particles.ForIds<float3,"pos",float3,"vel",float3,"oldPos">(scope (entId,pos,vel,oldPos) => {
-			vel *= Math.Exp(-0.1f*dt);
-			particles.ForIds<float3,"pos",float3,"vel",float3,"oldPos">(scope [&](entId2,pos2,vel2,oldPos2) => {
-				if (entId == entId2) return;
-				let dp = (pos - pos2);
+		particles.For<Pos3f,Vel3f,OldPos3f>(scope (recId,pos,vel,oldPos) => {
+			vel.v *= Math.Exp(-0.1f*dt);
+			particles.For<Pos3f,Vel3f,OldPos3f>(scope [&](recId2,pos2,vel2,oldPos2) => {
+				if (recId == recId2) return;
+				let dp = (pos.v - pos2.v);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
 				//vel += dp/len*(0.1f-len)*dt*0.1f;  vel *= 0.999f;
-				vel += dp/(len)*dt*-0.1f;
+				vel.v += dp/(len)*dt*-0.1f;
 			});
 		});
 
-		particles.For<float3,"pos",float3,"vel">(scope (pos,vel) => {
-			pos += vel* dt; 
+		particles.For<Pos3f,Vel3f>(scope (pos,vel) => {
+			pos.v += vel.v * dt; 
 		});
 
-		particles.For<float3,"pos",float3,"vel">(scope (pos,vel) => {
-			vel.x -= 0.05f*dt;
-			if (pos.x < -0.5f) {
-				vel.x = Abs(vel.x);
+		particles.For<Pos3f,Vel3f>(scope (pos,vel) => {
+			vel.v.x -= 0.05f*dt;
+			if (pos.v.x < -0.5f) {
+				vel.v.x = Abs(vel.v.x);
 			}
 		});
 	}
@@ -147,8 +147,8 @@ class Sim0: ISim
 		default:
 		}
 
-		/*particles.ForIds<float3,"vel">((entId, vel) => {
-			if (main != entId) return;
+		/*particles.For<float3,"vel">((recId, vel) => {
+			if (main != recId) return;
 
 			vel += acc;
 		});*/
