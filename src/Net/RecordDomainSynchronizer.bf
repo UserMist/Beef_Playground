@@ -4,7 +4,8 @@ namespace Playground;
 
 typealias NetTick = uint16;
 
-struct UserID: IHashable {
+struct UserID: IHashable
+{
 	private Guid guid;
 	public int GetHashCode()
 		=> guid.GetHashCode();
@@ -26,8 +27,8 @@ class RecordDomainUploader
 
 		public enum RecordInfo {
 			case DoesntExist;
-			case Update(uint8 packetIdx, uint8 packetAmount, bool allFields, (IComponent.Id compId, String value)[] assignments);
-			case SyncChecker(int64 hash); //to compensate for bad hashing, 1% of SymcCheckers should be randomly replaced with other cases
+			case Update(uint8 packetIdx, uint8 packetAmount, bool allFields, (Component.Type.Key compId, String value)[] assignments);
+			case SyncChecker(int64 hash); //to account for imperfect hashing 1% of SymcCheckers should be randomly replaced with other cases
 		}
 
 		public struct Header: IHashable {

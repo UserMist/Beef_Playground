@@ -3,12 +3,12 @@ namespace Playground;
 
 public struct RecordId: this(Guid guid), IComponent, IHashable
 {
-	public static IComponent.Id Id => .(1);
-	
-	public int GetHashCode()
-		=> guid.GetHashCode();
+	public static Component.Type.Key TypeKey => .(1);
 
 	public this() {
 		guid = .Create();
 	}
+
+	public int GetHashCode()
+		=> guid.GetHashCode();
 }

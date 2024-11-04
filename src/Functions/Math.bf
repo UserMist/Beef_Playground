@@ -1,7 +1,9 @@
 using Playground;
 
-namespace System {
-	extension Math {
+namespace System
+{
+	extension Math
+	{
 		public static Vec3<T> Max<T>(Vec3<T> a, Vec3<T> b)
 		where T: operator T+T, operator T-T, operator T*T, operator T/T, IIsNaN
 		where bool: operator T<T {

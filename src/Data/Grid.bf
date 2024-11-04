@@ -2,7 +2,8 @@ using System;
 using static System.Math;
 namespace Playground;
 
-public class Grid2<T> {
+public class Grid2<T>
+{
 	[Inline] public int width => cells.GetLength(1);
 	[Inline] public int height => cells.GetLength(0);
 	public T[,] cells ~ delete _;
@@ -54,9 +55,53 @@ public class Grid2<T> {
 		return this[ClipToScreen(a)];
 	}
 
-	const String sv = "this[a] = color;";
+	public void DrawTriangle(float3[3] verts, delegate T(float3 clipCoords) method) {
+		var verts;
+		if (verts[0].y > verts[1].y) Swap!(verts[0], verts[1]);
+		if (verts[1].y > verts[2].y) Swap!(verts[1], verts[2]);
+		if (verts[0].y > verts[1].y) Swap!(verts[0], verts[1]);
 
 
+	}
+
+	private void drawTriangleUnsafe(float3[3] ord, delegate T(float3 clipCoords) method) {
+		let p = int3[3]((.)(ord[0] + .All(0.5f)), (.)(ord[1] + .All(0.5f)), (.)(ord[2] + .All(0.5f)));
+
+		if (p[0].y != p[1].y) {
+			for (var y = p[0].y; y <= p[1].y; y++) {
+				var x02 = int(0.5f + (ord[2].x - ord[0].x) * (y - ord[0].y) / (ord[2].y - ord[0].y));
+				var x01 = int(0.5f + (ord[1].x - ord[0].x) * (y - ord[0].y) / (ord[1].y - ord[0].y));
+				if (x02 < x01) Swap!(x01, x02);
+				for (var x = x01; x <= x02; x++)
+					this[x,y] = method(default);
+			}
+		} else {
+			var x01 = p[0].x;
+			var x02 = p[1].x;
+			if (x02 < x01) Swap!(x01, x02);
+
+			for (var x = x01; x <= x02; x++) {
+				this[x,p[0].y] = method(default);
+			}
+		}
+
+		if (p[1].y != p[2].y) {
+			for (var y = p[1].y; y <= p[2].y; y++) {
+				var x02 = int(0.5f + (ord[2].x - ord[0].x) * (y - ord[0].y) / (ord[2].y - ord[0].y));
+				var x12 = int(0.5f + (ord[2].x - ord[1].x) * (y - ord[1].y) / (ord[2].y - ord[1].y));
+				if (x02 < x12) Swap!(x12, x02);
+				for (var x = x12; x <= x02; x++)
+					this[x,y] = method(default);
+			}
+		}
+	}
+
+	/// Uses Bresenham's algorithm
+	public void DrawLine(float3[2] verts, T value) {
+		DrawLine(verts[0], verts[1], value);
+	}
+
+	//todo: check if float3 converts properly to int3 (no wraparound)
 	/// Uses Bresenham's algorithm
 	public void DrawLine(float3 a, float3 b, T value) {
 		if (ClipToScreen((.) b) == ClipToScreen((.) a)) {

@@ -2,7 +2,8 @@ using System;
 using System.IO;
 namespace Playground;
 
-class AssetTools {
+class AssetTools
+{
 	const float p = 0.453125f;
 	private static uint8 toGamma(float x) {
 		return (.)Math.Pow(x, p);

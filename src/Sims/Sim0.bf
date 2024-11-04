@@ -8,7 +8,7 @@ namespace Playground;
 
 class Sim0: ISim
 {
-	RecordTable particles = new .(80, .Create<Pos3f>(), .Create<Vel3f>(), .Create<OldPos3f>()) ~ delete _;
+	RecordTable particles = new .(80, Component.Type.Create<Pos3f>(), Component.Type.Create<Vel3f>(), Component.Type.Create<OldPos3f>()) ~ delete _;
 	RecordId main;
 
 	Random rng = new .(7) ~ delete _;
@@ -20,7 +20,7 @@ class Sim0: ISim
 
 	public this() {
 		let n = 3;
-		for (let i < n) main = particles.AddLater();
+		for (let i < n) main = particles.MarkToAdd();
 		particles.Refresh();
 
 		var avgV = float3(0,0);

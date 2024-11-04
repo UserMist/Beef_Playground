@@ -7,3 +7,11 @@ StartupObject = "Playground.Program"
 
 [Configs.Release.Win64]
 OptimizationLevel = "O3"
+
+[[ProjectFolder.Items]]
+Type = "AutoFolder"
+Name = "Net"
+
+[[ProjectFolder.Items.Items]]
+Type = "IgnoreSource"
+Name = "RecordDomainSynchronizer.bf"

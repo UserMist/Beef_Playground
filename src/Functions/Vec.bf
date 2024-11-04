@@ -1,7 +1,8 @@
 using System;
 namespace Playground;
 
-struct Vec2<T>: this(T x, T y) where T: operator T+T, operator T-T, operator T*T, operator T/T {
+struct Vec2<T>: this(T x, T y) where T: operator T+T, operator T-T, operator T*T, operator T/T
+{
 	[Commutable] public static Self operator +(Self a, Self b) => .(a.x+b.x, a.y+b.y);
 	public static Self operator -(Self a, Self b) => .(a.x-b.x, a.y-b.y);
 	[Commutable] public static Self operator *(Self a, Self b) => .(a.x*b.x, a.y*b.y);
@@ -17,7 +18,8 @@ struct Vec2<T>: this(T x, T y) where T: operator T+T, operator T-T, operator T*T
 	public static Self All(T v) => .(v, v);
 }
 
-struct Vec3<T>: this(T x, T y, T z = default) where T: operator T+T, operator T-T, operator T*T, operator T/T {
+struct Vec3<T>: this(T x, T y, T z = default) where T: operator T+T, operator T-T, operator T*T, operator T/T
+{
 	[Commutable] public static Self operator +(Self a, Self b) => .(a.x+b.x, a.y+b.y, a.z+b.z);
 	public static Self operator -(Self a, Self b) => .(a.x-b.x, a.y-b.y, a.z-b.z);
 	[Commutable] public static Self operator *(Self a, Self b) => .(a.x*b.x, a.y*b.y, a.z*b.z);
