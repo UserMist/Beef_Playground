@@ -77,7 +77,8 @@ public class RecordTable
 
 	private void populate(Span<Component> realComponents, Span<Component> components, RecordId id) {
 		realComponents[0] = .Create(id);
-		components.CopyTo(0, realComponents, 1, components.Length);
+		for (let i < components.Length)
+			realComponents[i + 1] = components[i];
 	}
 
 	public bool MarkToRemove(RecordId id, bool disableDestructors = false) {
