@@ -27,18 +27,18 @@ class Sim0: ISim
 		var avgP = float3(0,0);
 
 		particles.For<Pos3f,Vel3f,OldPos3f>(scope [&](pos,vel,oldPos) => {
-			pos.v = float3(rand(), rand(), rand() * 0.01f)*0.5f;
-			vel.v = float3(rand(), rand(), rand() * 0.01f)*0.4f;
-			oldPos.v = pos.v;
-			avgV += vel.v;
+			pos = float3(rand(), rand(), rand() * 0.01f)*0.5f;
+			vel = float3(rand(), rand(), rand() * 0.01f)*0.4f;
+			oldPos = pos;
+			avgV += vel;
 		});
 
 		avgV /= n;
 		avgP /= n;
 		particles.For<Pos3f,Vel3f,OldPos3f>(scope (pos,vel,oldPos) => {
-			pos.v -= avgP;
-			oldPos.v -= avgP;
-			vel.v -= avgV;
+			pos -= avgP;
+			oldPos -= avgP;
+			vel -= avgV;
 		});
 
 		Console.WriteLine("Simulation is running");
@@ -59,8 +59,8 @@ class Sim0: ISim
 		}
 
 		particles.For<Pos3f,Vel3f,OldPos3f>(scope (pos,vel,oldPos) => {
-			image.DrawLine(pos.v*.(float(image.height)/image.width,1), oldPos.v*.(float(image.height)/image.width,1), vel.v*0.5f+.All(0.5f));
-			oldPos.v = pos.v;
+			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), vel*0.5f+.All(0.5f));
+			oldPos = pos;
 
 			/*let r = 0.04f;
 			for (let j < image.height) {
@@ -78,24 +78,24 @@ class Sim0: ISim
 
 	void ISim.Advance(float dt) {
 		particles.For<Pos3f,Vel3f,OldPos3f>(scope (recId,pos,vel,oldPos) => {
-			vel.v *= Math.Exp(-0.1f*dt);
+			vel *= Math.Exp(-0.1f*dt);
 			particles.For<Pos3f,Vel3f,OldPos3f>(scope [&](recId2,pos2,vel2,oldPos2) => {
 				if (recId == recId2) return;
-				let dp = (pos.v - pos2.v);
+				let dp = (pos - pos2);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
 				//vel += dp/len*(0.1f-len)*dt*0.1f;  vel *= 0.999f;
-				vel.v += dp/(len)*dt*-0.1f;
+				vel += dp/(len)*dt*-0.1f;
 			});
 		});
 
 		particles.For<Pos3f,Vel3f>(scope (pos,vel) => {
-			pos.v += vel.v * dt; 
+			pos += vel * dt; 
 		});
 
 		particles.For<Pos3f,Vel3f>(scope (pos,vel) => {
-			vel.v.x -= 0.05f*dt;
-			if (pos.v.x < -0.5f) {
-				vel.v.x = Abs(vel.v.x);
+			vel.x -= 0.05f*dt;
+			if (pos.x < -0.5f) {
+				vel.x = Abs(vel.x);
 			}
 		});
 	}

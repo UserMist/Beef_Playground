@@ -51,3 +51,30 @@ public struct Component: this(Component.Type.Key typeKey, Variant value), IDispo
 	}
 }
 
+[AttributeUsage(.Struct)]
+public struct ComponentAttribute: this(int typeKey), Attribute, IOnTypeInit
+{
+	[Comptime] public void OnTypeInit(Type type, Self* prev)
+		=> Compiler.EmitTypeBody(type, scope $"""
+			public static Component.Type.Key TypeKey => .({typeKey});
+			public static implicit operator Component(Self v) => .Create(v);
+		""");
+}
+
+/*if (baseType != null) {
+	let constructors = baseType.GetMethods(.CreateInstance | .Public);
+	for (let ctor in constructors) {
+		if (!ctor.IsConstructor || ctor.ParamCount == 0)
+			continue;
+		
+		code += "public this(";
+		ctor.GetParamsDecl(code);
+		code += ") : base(";
+		for (let i < ctor.ParamCount) {
+			if (i > 0)
+				code += ", ";
+			code += ctor.GetParamName(i);
+		}
+		code += ") { }\n";
+	}
+}*/

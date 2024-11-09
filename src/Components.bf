@@ -2,17 +2,23 @@ using System;
 using System.Collections;
 namespace Playground;
 
-public struct Pos3f: this(float3 v), IComponent
+[Component(30685)]
+public struct Pos3f: float3, IComponent
 {
-	public static Component.Type.Key TypeKey => .(30685);
+	public this(float x, float y, float z = default): base(x, y, z) { }
+	public static implicit operator Self(float3 v) => .(v.x, v.y, v.z);
 }
 
-public struct OldPos3f: this(float3 v), IComponent
+[Component(15143)]
+public struct OldPos3f: float3, IComponent
 {
-	public static Component.Type.Key TypeKey => .(15143);
+	public this(float x, float y, float z = default): base(x, y, z) { }
+	public static implicit operator Self(float3 v) => .(v.x, v.y, v.z);
 }
 
-public struct Vel3f: this(float3 v), IComponent
+[Component(59280)]
+public struct Vel3f: float3, IComponent
 {
-	public static Component.Type.Key TypeKey => .(59280);
+	public this(float x, float y, float z = default): base(x, y, z) { }
+	public static implicit operator Self(float3 v) => .(v.x, v.y, v.z);
 }
