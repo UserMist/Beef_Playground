@@ -118,14 +118,14 @@ public class RecordTable
 		ThrowUnimplemented();
 	}
 
-	public bool HasComponents<T>(params Span<T> header) where T: IComponent.Type
-		=> chunks[0].HasComponents<T>(params header);
+	public bool Includes<T>(params Span<T> header) where T: IComponent.Type
+		=> chunks[0].Includes<T>(params header);
 
-	public bool MissesFields<T>(params Span<T> header) where T: IComponent.Type
-		=> chunks[0].MissesComponents<T>(params header);
+	public bool Excludes<T>(params Span<T> header) where T: IComponent.Type
+		=> chunks[0].Excludes<T>(params header);
 	
-	public bool HasOnlyComponents<T>(params Span<T> header) where T: IComponent.Type
-		=> chunks[0].HasOnlyComponents<T>(params header);
+	public bool HasOnly<T>(params Span<T> header) where T: IComponent.Type
+		=> chunks[0].HasOnly<T>(params header);
 	
 	[OnCompile(.TypeInit), Comptime]
 	private static void for_variadic() {
@@ -157,7 +157,7 @@ public class RecordTable
 		Compiler.EmitTypeBody(typeof(Self), code);
 	}
 
-	private static (String genericArgs, String delegateArgs, String constraints, String spanInits, String spanArgs, String delegateGenericArgs)
+	private static (String genericArgs, String delegateArgs, String constraints, String spanInits, String spanArgs, String delegateGenericArgs, String includes)
 	for_genStrings(bool includeRecId, int otherCount) {
 		String genericArgs = new .();
 		String delegateArgs = new .();
@@ -165,6 +165,7 @@ public class RecordTable
 		String spanInits = new .();
 		String spanArgs = new .();
 		String delegateGenericArgs = new .();
+		String includes = new .();
 		
 		if (includeRecId) {
 			delegateArgs += scope $"in RecordId recId";
@@ -172,10 +173,14 @@ public class RecordTable
 			spanArgs += "recIds[i]";
 		}
 
+		if (otherCount > 0)
+			includes += "table.Includes(";
+
 		for (let n < otherCount) {
 			if (n > 0) {
 				genericArgs += ", ";
 				delegateGenericArgs += ", ";
+				includes += ", ";
 			}
 
 			if (n > 0 || includeRecId) {
@@ -189,7 +194,11 @@ public class RecordTable
 			constraints += scope $"\n\twhere K{n}: IComponent";
 			spanInits += scope $"\n\t\t\tlet span{n} = chunk.Span<K{n}>();";
 			spanArgs += scope $"ref span{n}[i]";
+			includes += scope $"K{n}.TypeKey";
 		}
+
+		if (otherCount > 0)
+			includes += ") && ";
 
 		if (!genericArgs.IsEmpty) {
 			genericArgs..Insert(0, '<')..Append('>');
@@ -201,6 +210,6 @@ public class RecordTable
 			delegateGenericArgs.Insert(0, "Ids");
 		}*/
 
-		return (genericArgs, delegateArgs, constraints, spanInits, spanArgs, delegateGenericArgs);
+		return (genericArgs, delegateArgs, constraints, spanInits, spanArgs, delegateGenericArgs, includes);
 	}
 }

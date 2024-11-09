@@ -90,7 +90,7 @@ public class RecordDomain
 		=> reserveTable<T>(DefaultCapacityPerChunk, params components);
 
 	private RecordTable reserveTable<T>(int capacityPerChunk, params Span<T> components) where T: IComponent.Type {
-		for (let table in tables) if (table.HasOnlyComponents<T>(params components)) {
+		for (let table in tables) if (table.HasOnly<T>(params components)) {
 			return table;
 		}
 		return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, components));
@@ -103,33 +103,22 @@ public class RecordDomain
 
 	[OnCompile(.TypeInit), Comptime]
 	private static void for_variadic() {
-		String begin = "{";
-		String end = "}";
-		String code = new .(); defer delete code;
+		let begin = "{";
+		let end = "}";
+		let code = new String(); defer delete code;
 
-		for (let step < RecordTable.[Friend]for_maxVariadicLength*2) {
-			if (step == 0) continue;
-
-			let otherCount = step / 2;
-			let g = RecordTable.[Friend]for_genStrings(step % 2 == 1, otherCount);
-
-			String requireds = scope .();
-			for (let i < otherCount) {
-				if (i > 0) requireds += ", ";
-				requireds += scope $"const V{i}";
-			}
-
+		for (let step < RecordTable.[Friend]for_maxVariadicLength*2) if (step > 0) {
+			let g = RecordTable.[Friend]for_genStrings(step % 2 == 1, step / 2);
 			code += scope $"""
 
 				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector, bool refresh = true){g.constraints} {begin}
 					for (let table in tables)
-						if (selector(table))
+						if ({g.includes}selector(table))
 							table.For{g.delegateGenericArgs}(method, refresh);
 				{end}
 
 			""";
 		}
-
 		Compiler.EmitTypeBody(typeof(Self), code);
 	}
 }
