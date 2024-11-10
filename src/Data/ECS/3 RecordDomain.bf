@@ -101,6 +101,8 @@ public class RecordDomain
 			table.Refresh();
 	}
 
+	//private static delegate bool(RecordTable) emptyFilter = (new (table) => true) ~ delete _;
+
 	[OnCompile(.TypeInit), Comptime]
 	private static void for_variadic() {
 		let begin = "{";
@@ -111,10 +113,10 @@ public class RecordDomain
 			let g = RecordTable.[Friend]for_genStrings(step % 2 == 1, step / 2);
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector, bool refresh = true){g.constraints} {begin}
-					for (let table in tables)
-						if ({g.includes}selector(table))
-							table.For{g.delegateGenericArgs}(method, refresh);
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool restructured = true, delegate bool({nameof(RecordTable)} table) selector = null){g.constraints} {begin}
+					for (let table in this.tables)
+						if ({g.includes}(selector == null || selector(table)))
+							table.For{g.delegateGenericArgs}(method, restructured);
 				{end}
 
 			""";

@@ -141,13 +141,13 @@ public class RecordTable
 
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool refresh = true){g.constraints} {begin}
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool restructured = true){g.constraints} {begin}
 					for (let chunk in this.chunks) {begin}{g.spanInits}
 						let c = chunk.Count;
 						for (let i < c)
 							method({g.spanArgs});
 					{end}
-					if (refresh)
+					if (restructured)
 						this.Refresh();
 				{end}
 

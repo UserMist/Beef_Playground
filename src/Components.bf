@@ -22,3 +22,10 @@ public struct Vel3f: float3, IComponent
 	public this(float x, float y, float z = default): base(x, y, z) { }
 	public static implicit operator Self(float3 v) => .(v.x, v.y, v.z);
 }
+
+[Component(14088)]
+public struct RotVel3f: float3, IComponent
+{
+	public this(float x, float y, float z = default): base(x, y, z) { }
+	public static implicit operator Self(float3 v) => .(v.x, v.y, v.z);
+}
