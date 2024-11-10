@@ -19,8 +19,13 @@ public class RecordDomain
 				method(records);
 	}
 
-	public RecordId MarkToAdd(params Span<Component> components)
-		=> reserveTable<Component>(params components).MarkToAdd(params components);
+	public RecordId MarkToAdd(params Span<Component> components) {
+		Component.Type[] rawTypes = scope .[components.Length+1];
+		rawTypes[0] = .Create<RecordId>();
+		for (let i < components.Length)
+			rawTypes[i + 1] = components[i];
+		return reserveTable<Component.Type>(params rawTypes).MarkToAdd(params components);
+	}
 
 	public bool MarkToRemove(RecordId id) {
 		for (let table in tables) {
@@ -86,14 +91,14 @@ public class RecordDomain
 		return true;
 	}
 	
-	private RecordTable reserveTable<T>(params Span<T> components) where T: IComponent.Type
-		=> reserveTable<T>(DefaultCapacityPerChunk, params components);
+	private RecordTable reserveTable<T>(params Span<T> rawComponents) where T: IComponent.Type
+		=> reserveTable<T>(DefaultCapacityPerChunk, params rawComponents);
 
-	private RecordTable reserveTable<T>(int capacityPerChunk, params Span<T> components) where T: IComponent.Type {
-		for (let table in tables) if (table.HasOnly<T>(params components)) {
+	private RecordTable reserveTable<T>(int capacityPerChunk, params Span<T> rawComponents) where T: IComponent.Type {
+		for (let table in tables) if (table.HasOnly<T>(params rawComponents)) {
 			return table;
 		}
-		return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, components));
+		return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
 	}
 
 	public void Refresh() {

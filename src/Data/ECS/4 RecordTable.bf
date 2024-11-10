@@ -75,10 +75,10 @@ public class RecordTable
 		return;
 	}
 
-	private void populate(Span<Component> realComponents, Span<Component> components, RecordId id) {
-		realComponents[0] = .Create(id);
+	private void populate(Span<Component> rawComponents, Span<Component> components, RecordId id) {
+		rawComponents[0] = .Create(id);
 		for (let i < components.Length)
-			realComponents[i + 1] = components[i];
+			rawComponents[i + 1] = components[i];
 	}
 
 	public bool MarkToRemove(RecordId id, bool disableDestructors = false) {
