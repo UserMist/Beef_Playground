@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading;
 namespace Playground;
 
 /// Collection of records with varying component compositions. Each record at least has a RecordId component.
@@ -118,10 +119,10 @@ public class RecordDomain
 			let g = RecordTable.[Friend]for_genStrings(step % 2 == 1, step / 2);
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool restructured = true, delegate bool({nameof(RecordTable)} table) selector = null){g.constraints} {begin}
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector = null, ThreadPool threads = null, bool restructured = true){g.constraints} {begin}
 					for (let table in this.tables)
 						if ({g.includes}(selector == null || selector(table)))
-							table.For{g.delegateGenericArgs}(method, restructured);
+							table.For{g.delegateGenericArgs}(method, threads, restructured);
 				{end}
 
 			""";

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading;
 namespace Playground;
 
 /// A subset of RecordDomain. All records in it have same composition.
@@ -141,14 +142,18 @@ public class RecordTable
 
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool restructured = true){g.constraints} {begin}
-					for (let chunk in this.chunks) {begin}{g.spanInits}
-						let c = chunk.Count;
-						for (let i < c)
-							method({g.spanArgs});
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, ThreadPool threads = null, bool restructured = true){g.constraints} {begin}
+					defer {begin} if (restructured) this.Refresh(); {end}
+
+					if (threads == null) {begin}
+						for (let chunk in this.chunks) {begin}{g.spanInits}
+							let c = chunk.Count;
+							for (let i < c)
+								method({g.spanArgs});
+						{end}
+						return;
 					{end}
-					if (restructured)
-						this.Refresh();
+					ThrowUnimplemented();
 				{end}
 
 			""";
@@ -169,7 +174,7 @@ public class RecordTable
 		
 		if (includeRecId) {
 			delegateArgs += scope $"in RecordId recId";
-			spanInits += scope $"\n\t\t\tlet recIds = chunk.Span<RecordId>();";
+			spanInits += scope $"\n\t\t\t\tlet recIds = chunk.Span<RecordId>();";
 			spanArgs += "recIds[i]";
 		}
 

@@ -8,6 +8,11 @@ namespace Playground;
 
 class Sim0: ISim
 {
+	[Component(9640)]
+	public struct PlayerTag: IComponent
+	{
+	}
+
 	RecordDomain domain = new .() ~ delete _;
 	RecordId main;
 
@@ -29,6 +34,8 @@ class Sim0: ISim
 			main = domain.MarkToAdd((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos);
 			avgV += vel;
 		}
+		domain.Refresh();
+		domain.MarkToUpdateComponents(main, PlayerTag());
 		domain.Refresh();
 
 		avgV /= n;
@@ -86,9 +93,7 @@ class Sim0: ISim
 			});
 		});
 
-		domain.For<Pos3f,Vel3f>(scope (pos,vel) => {
-			pos += vel * dt; 
-		});
+		CommonMutators.AdvanceMotion(domain, dt);
 
 		domain.For<Pos3f,Vel3f>(scope (pos,vel) => {
 			vel.x -= 0.05f*dt;
@@ -145,11 +150,9 @@ class Sim0: ISim
 		default:
 		}
 
-		/*domain.For<float3,"vel">((recId, vel) => {
-			if (main != recId) return;
-
+		domain.For<Vel3f>(scope (vel) => {
 			vel += acc;
-		});*/
+		}, scope (table) => table.Includes(PlayerTag.TypeKey));
 	}
 	
 		/*
