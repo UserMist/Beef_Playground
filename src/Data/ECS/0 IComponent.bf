@@ -11,3 +11,13 @@ public interface IComponent
 		public System.Type Type { get; }
 	}
 }
+
+public interface IUniqueComponent: IComponent
+{
+
+}
+
+public interface IOrdinalComponent: IComponent
+{
+
+}

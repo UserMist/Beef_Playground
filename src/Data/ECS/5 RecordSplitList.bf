@@ -4,20 +4,19 @@ using System.Diagnostics;
 namespace Playground;
 
 /// SoA list for Record. It's a high-performance data structure, which allows marking for addition and removal (finished after refresh).
-public class RecordList
+public class RecordSplitList
 {
 	public Dictionary<Component.Type.Key, ComponentDescription> header;
-
-	public int Count { get; private set; } = 0;
 	private int count = 0;
 	public int Capacity;
-	
 	private int stride;
 	private int activeBufferSize;
 	private uint8[] raw; //second half of array is a temporary buffer for deletions
 	private List<int> removalQueue;
 	private int64 headerSum;
 	
+	public int Count { get; private set; } = 0;
+
 	public ~this() {
 		delete raw;
 		delete removalQueue;
@@ -30,7 +29,7 @@ public class RecordList
 		Init(capacity, header);
 	}
 
-	public this(RecordList template) {
+	public this(RecordSplitList template) {
 		let header = scope Component.Type[template.header.Count];
 		var i = 0;
 		for (let c in template.header.Values) {
@@ -66,13 +65,13 @@ public class RecordList
 		}
 	}
 
-	public bool HasComponent<T>() where T: IComponent
+	public bool Includes<T>() where T: IComponent
 		=> header.ContainsKey(T.TypeKey);
 
-	public bool HasComponents<T>(params Span<T> header) where T: IComponent.Type
-		=> HasComponents<T>(Component.Type.HeaderSum<T>(params header), params header);
+	public bool Includes<T>(params Span<T> header) where T: IComponent.Type
+		=> Includes<T>(Component.Type.HeaderSum<T>(params header), params header);
 
-	public bool HasComponents<T>(int headerSum, params Span<T> header) where T: IComponent.Type {
+	public bool Includes<T>(int headerSum, params Span<T> header) where T: IComponent.Type {
 		if (this.header.Count < header.Length || this.headerSum < headerSum) {
 			return false;
 		}
@@ -84,10 +83,10 @@ public class RecordList
 		return true;
 	}
 
-	public bool MissesComponent<T>() where T: IComponent
+	public bool Excludes<T>() where T: IComponent
 		=> !header.ContainsKey(T.TypeKey);
 
-	public bool MissesComponents<T>(params Span<T> header) where T: IComponent.Type {
+	public bool Excludes<T>(params Span<T> header) where T: IComponent.Type {
 		for (let id in header) {
 			if (this.header.ContainsKey(id.TypeKey)) {
 				return false;
@@ -96,11 +95,10 @@ public class RecordList
 		return true;
 	}
 	
-	public bool HasOnlyComponents<T>(params Span<T> header) where T: IComponent.Type {
-		return HasOnlyComponents<T>(Component.Type.HeaderSum<T>(params header), params header);
-	}
+	public bool HasOnly<T>(params Span<T> header) where T: IComponent.Type
+		=> HasOnly<T>(Component.Type.HeaderSum<T>(params header), params header);
 	
-	public bool HasOnlyComponents<T>(int64 headerSum, params Span<T> header) where T: IComponent.Type {
+	public bool HasOnly<T>(int64 headerSum, params Span<T> header) where T: IComponent.Type {
 		if (this.header.Count != header.Length || this.headerSum != headerSum) {
 			return false;
 		}

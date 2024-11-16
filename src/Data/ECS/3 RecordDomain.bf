@@ -7,7 +7,7 @@ namespace Playground;
 public class RecordDomain
 {
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
-	public int DefaultCapacityPerChunk = 64;
+	public int DefaultCapacityPerChunk = 256;
 
 	public void ForTables(delegate void(RecordTable) method) {
 		for (let table in tables)
@@ -107,10 +107,25 @@ public class RecordDomain
 			table.Refresh();
 	}
 
+	public struct JobHandle
+	{
+		public List<RecordTable.JobHandle> events = new .();
+		public Object obj;
+
+		public bool WaitFor(int waitMS = -1) {
+			while (events.Count > 0) {
+				events[0].WaitFor(waitMS);
+				events.RemoveAt(0);
+			}
+			delete events;
+			return true;
+		}
+	}
+
 	//private static delegate bool(RecordTable) emptyFilter = (new (table) => true) ~ delete _;
 
 	[OnCompile(.TypeInit), Comptime]
-	private static void for_variadic() {
+	static void Emit_VariadicFor() {
 		let begin = "{";
 		let end = "}";
 		let code = new String(); defer delete code;
@@ -119,10 +134,18 @@ public class RecordDomain
 			let g = RecordTable.[Friend]for_genStrings(step % 2 == 1, step / 2);
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector = null, ThreadPool threads = null, bool restructured = true){g.constraints} {begin}
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector = null, bool restructured = true){g.constraints} {begin}
 					for (let table in this.tables)
 						if ({g.includes}(selector == null || selector(table)))
-							table.For{g.delegateGenericArgs}(method, threads, restructured);
+							table.For{g.delegateGenericArgs}(method, restructured);
+				{end}
+
+				public JobHandle ScheduleFor{g.genericArgs}(delegate void({g.delegateArgs}) method, int concurrency = 8, delegate bool({nameof(RecordTable)} table) selector = null, bool restructured = true){g.constraints} {begin}
+					let handle = JobHandle();
+					for (let table in this.tables)
+						if ({g.includes}(selector == null || selector(table)))
+							handle.events.Add(table.ScheduleFor{g.delegateGenericArgs}(method, concurrency, restructured));
+					return handle;
 				{end}
 
 			""";

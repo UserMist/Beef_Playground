@@ -52,12 +52,12 @@ public struct Component: this(Component.Type.Key typeKey, Variant value), IDispo
 }
 
 [AttributeUsage(.Struct)]
-public struct ComponentAttribute: this(int typeKey), Attribute, IOnTypeInit
+public struct ComponentAttribute: this(uint16 typeKey), Attribute, IOnTypeInit
 {
 	[Comptime] public void OnTypeInit(Type type, Self* prev)
 		=> Compiler.EmitTypeBody(type, scope $"""
-			public static Component.Type.Key TypeKey => .({typeKey});
-			public static implicit operator Component(Self v) => .Create(v);
+		public static Component.Type.Key TypeKey => .({typeKey});
+		public static implicit operator Component(Self v) => .Create(v);
 		""");
 }
 

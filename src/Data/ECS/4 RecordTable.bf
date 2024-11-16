@@ -8,7 +8,7 @@ public class RecordTable
 {
 	const int for_maxVariadicLength = 12;
 	
-	private List<RecordList> chunks;
+	private List<RecordSplitList> chunks;
 	public Dictionary<RecordId, (int, int)> indexing;
 	public int CapacityPerChunk => chunks[0].Capacity;
 
@@ -29,7 +29,7 @@ public class RecordTable
 	}
 	
 	private void init<T>(int capacityPerChunk, Span<T> header) where T: IComponent.Type {
-		chunks = new .(1)..Add(new RecordList()..Init(capacityPerChunk, header));
+		chunks = new .(1)..Add(new RecordSplitList()..Init(capacityPerChunk, header));
 		indexing = new .(32);
 	}
 
@@ -70,7 +70,7 @@ public class RecordTable
 			}
 		}
 
-		let chunk = chunks.Add(..new RecordList(chunks[0]));
+		let chunk = chunks.Add(..new RecordSplitList(chunks[0]));
 		chunk.MarkToAddWithoutResizing(params realValues);
 		indexing.Add(id, (chunks.Count-1, chunk.[Friend]count-1));
 		return;
@@ -127,7 +127,22 @@ public class RecordTable
 	
 	public bool HasOnly<T>(params Span<T> header) where T: IComponent.Type
 		=> chunks[0].HasOnly<T>(params header);
-	
+
+	public struct JobHandle
+	{
+		public List<WaitEvent> events = new .();
+
+		public bool WaitFor(int waitMS = -1) {
+			while (events.Count > 0) {
+				//if (!events[i].WaitFor(waitMS)) return false;
+				delete events[0]..WaitFor(waitMS);
+				events.RemoveAt(0);
+			}
+			delete events;
+			return true;
+		}
+	}
+
 	[OnCompile(.TypeInit), Comptime]
 	private static void for_variadic() {
 		String begin = "{";
@@ -142,20 +157,50 @@ public class RecordTable
 
 			code += scope $"""
 
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, ThreadPool threads = null, bool restructured = true){g.constraints} {begin}
+				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool restructured = true){g.constraints} {begin}
 					defer {begin} if (restructured) this.Refresh(); {end}
-
-					if (threads == null) {begin}
-						for (let chunk in this.chunks) {begin}{g.spanInits}
-							let c = chunk.Count;
-							for (let i < c)
-								method({g.spanArgs});
-						{end}
-						return;
+					for (let chunkIdx < this.chunks.Count) {begin}
+						let chunk = this.chunks[chunkIdx];{g.spanInits}
+						let c = chunk.Count;
+						for (let i < c)
+							method({g.spanArgs});
 					{end}
-					ThrowUnimplemented();
 				{end}
 
+				public JobHandle ScheduleFor{g.genericArgs}(delegate void({g.delegateArgs}) method, int concurrency = 8, bool restructured = true){g.constraints} {begin}
+					let handle = JobHandle();
+
+					var totalC = 0;
+					for (let chunk in this.chunks)
+						totalC += chunk.Count;
+					let delta = totalC/concurrency;
+					let remainder = totalC - delta*concurrency;
+		
+					var start = 0;
+					var end = remainder + delta;
+					for (let itemId < concurrency) {begin}
+						let event = handle.events.Add(..new WaitEvent());
+						ThreadPool.QueueUserWorkItem(new () => {begin}
+							var lStart = start;
+							var lEnd = end;
+							for (let chunk in this.chunks) {begin}
+								defer {begin}
+									lStart -= chunk.Count;
+									lEnd -= chunk.Count;
+								{end}
+								if (lEnd <= 0) break;
+								if (lStart >= chunk.Count) continue;
+								let c = Math.Min(lEnd, chunk.Count);{g.spanInits}
+								for (var i = lStart; i < c; i++)
+									method({g.spanArgs});
+							{end}
+							event.Set();
+						{end});
+						start = end;
+						end = start + delta;
+					{end}
+					return handle;
+				{end}
 			""";
 		}
 
@@ -174,7 +219,7 @@ public class RecordTable
 		
 		if (includeRecId) {
 			delegateArgs += scope $"in RecordId recId";
-			spanInits += scope $"\n\t\t\t\tlet recIds = chunk.Span<RecordId>();";
+			spanInits += scope $"\n\t\t\tlet recIds = chunk.Span<RecordId>();";
 			spanArgs += "recIds[i]";
 		}
 
