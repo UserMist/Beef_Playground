@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-namespace Playground.Data.ECS;
+namespace Playground.Data.Record;
 
 interface IUniformRecords
 {

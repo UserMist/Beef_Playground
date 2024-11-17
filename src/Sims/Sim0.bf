@@ -3,44 +3,51 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Collections;
+using System.Diagnostics;
+using Playground.Data;
+using Playground.Data.Record;
+using Playground.Data.Record.Components;
 using static System.Math;
+
+namespace Playground.Data.Record.Components
+{
+	[Component(9640)]
+	public struct PlayerTag: this(int id), IComponent
+	{
+	}
+}
+
 namespace Playground;
 
 class Sim0: ISim
 {
-	[Component(9640)]
-	public struct PlayerTag: IComponent
-	{
-	}
-
 	RecordDomain domain = new .() ~ delete _;
-	RecordId main;
 
 	Random rng = new .(7) ~ delete _;
 	float rand() => .(rng.NextDouble()*2-1);
+	float rand(Random rng, float min = -1, float max = 1) => .(rng.NextDouble()*(max-min)+min);
 
 	IDumper dumper = new RawDumper(typeof(float3)) ~ delete _;
 	public NetWriter netWriter = new .(dumper) ~ delete _;
 	public NetReader netReader = new .(dumper) ~ delete _;
 
 	public this() {
-		let n = 3;
+		let n = 13;
 
+		List<RecordId> ids = scope .();
 		var avgP = float3(0,0);
 		var avgV = float3(0,0);
 		for (let i < n) {
 			let pos = float3(rand(), rand(), rand() * 0.01f)*0.5f;
 			let vel = float3(rand(), rand(), rand() * 0.01f)*0.4f;
-			main = domain.MarkToAdd((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos);
+			ids.Add(domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos));
 			avgV += vel;
 		}
-		domain.Refresh();
-		domain.MarkToUpdateComponents(main, PlayerTag());
 		domain.Refresh();
 
 		avgV /= n;
 		avgP /= n;
-		domain.For<Pos3f,Vel3f,OldPos3f>(scope (pos,vel,oldPos) => {
+		domain.For("ref Pos3f, ref Vel3f, ref OldPos3f").Run(scope (pos,vel,oldPos) => {
 			pos -= avgP;
 			oldPos -= avgP;
 			vel -= avgV;
@@ -63,8 +70,14 @@ class Sim0: ISim
 			cells[i] = Lerp(cells[i], .(0.05f,0.02f,0.03f), 0.04f);
 		}
 
-		domain.For<Pos3f,Vel3f,OldPos3f>(scope (pos,vel,oldPos) => {
-			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), vel*0.5f+.All(0.5f));
+		domain.For("Pos3f, Vel3f, ref OldPos3f").Run(scope (pos,vel,oldPos) => {
+			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), .All(0.5f));
+			oldPos = pos;
+		}, scope (table) => table.Excludes(PlayerTag.TypeKey));
+
+		domain.For("Pos3f, Vel3f, ref OldPos3f, PlayerTag").Run(scope (pos,vel,oldPos,ply) => {
+			let rng = scope Random(ply.id);
+			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), .(rand(rng,0,1), rand(rng,0,1), rand(rng,0,1)));
 			oldPos = pos;
 
 			/*let r = 0.04f;
@@ -82,9 +95,12 @@ class Sim0: ISim
 	}
 
 	void ISim.Advance(float dt) {
-		domain.For<Pos3f,Vel3f,OldPos3f>(scope (recId,pos,vel,oldPos) => {
+		var dt;
+		dt *= 0.125f;
+
+		domain.For("RecordId,Pos3f,ref Vel3f,OldPos3f").Run(scope (recId,pos,vel,oldPos) => {
 			vel *= Math.Exp(-0.1f*dt);
-			domain.For<Pos3f,Vel3f,OldPos3f>(scope [&](recId2,pos2,vel2,oldPos2) => {
+			domain.For("RecordId,Pos3f,Vel3f,OldPos3f").Run(scope [&](recId2,pos2,vel2,oldPos2) => {
 				if (recId == recId2) return;
 				let dp = (pos - pos2);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
@@ -94,23 +110,56 @@ class Sim0: ISim
 		});
 
 		CommonMutators.AdvanceMotion(domain, dt);
+		CommonMutators.Dampen<Vel3f>(domain, dt, 0.5f);
 
-		domain.For<Pos3f,Vel3f>(scope (pos,vel) => {
+		domain.For("Pos3f,ref Vel3f").Run(scope (pos,vel) => {
 			vel.x -= 0.05f*dt;
-			if (pos.x < -0.5f) {
+			if (pos.x < -0.5f)
 				vel.x = Abs(vel.x);
-			}
 		});
 	}
 
-	void ISim.Act(SDL2.SDL.KeyboardEvent event) {
+	float3 axis(SDL2.SDL.Scancode input, SDL2.SDL.Scancode w, SDL2.SDL.Scancode a, SDL2.SDL.Scancode s, SDL2.SDL.Scancode d) {
 		var acc = float3(0,0);
-		let p = 0.5f;
+		if (input == w) {
+			acc += .(0, 1);
+		} else if (input == s) {
+			acc -= .(0, 1);
+		} else if (input == a) {
+			acc -= .(1, 0);
+		} else if (input == d) {
+			acc += .(1, 0);
+		}
+		return acc;
+	}
+
+	var did = 0;
+
+	void ISim.Act(SDL2.SDL.KeyboardEvent event) {
 		switch(event.keysym.scancode) {
-		case .W, .Up: acc.y += p;
-		case .S, .Down: acc.y -= p;
-		case .D, .Right: acc.x += p;
-		case .A, .Left: acc.x -= p;
+		case .Pageup:
+			domain.For("RecordId").Run(scope [&](id) => {
+				if (did++ > 0) return;
+				Console.WriteLine(id.guid.[Friend]mA.ToString(..scope .()));
+				domain.ChangeComponents(id, .Set(PlayerTag(15)));
+			}, scope (table) => table.Excludes(PlayerTag.TypeKey));
+			did = 0;
+
+		case .PageDown:
+			domain.For("RecordId").Run(scope [&](id) => {
+				if (did++ > 0) return;
+				domain.ChangeComponents(id, .Remove<PlayerTag>());
+			}, scope (table) => table.Includes(PlayerTag.TypeKey));
+			did = 0;
+
+		case .L:
+			var i = 0;
+			domain.For("RecordId").Run(scope (id) => {
+				Console.Write("   ");
+				Console.WriteLine(id.guid.[Friend]mA);
+			}, scope [&](table) => { Console.WriteLine(scope $"\ntable{i++}:"); return true; });
+			Console.WriteLine();
+
 		case .Home:
 			Console.Write("\n>");
 			let tokens = Console.ReadLine(..scope .()).Split(' ');
@@ -150,9 +199,13 @@ class Sim0: ISim
 		default:
 		}
 
-		domain.For<Vel3f>(scope (vel) => {
-			vel += acc;
-		}, scope (table) => table.Includes(PlayerTag.TypeKey));
+		domain.For("ref Vel3f, PlayerTag").Run(scope (vel, tag) => {
+			if (tag.id == 15) {
+				vel += axis(event.keysym.scancode, .W, .A, .S, .D) * 0.5f;
+			} else if (tag.id == 1) {
+				vel += axis(event.keysym.scancode, .Up, .Left, .Down, .Right) * 0.5f;
+			}
+		});
 	}
 	
 		/*
@@ -166,7 +219,7 @@ class Sim0: ISim
 		RecordStorage r = scope .();
 		r.tables.Add(ur);
 
-		r.For<float, "x", int, "y">(scope (x, y) => {
+		r.For("float, "x", int, "y">(scope (x, y) => {
 			Console.WriteLine(x);
 			Console.WriteLine(y);
 		}, scope (u) => u.HasFields("x") && u.MissesFields());

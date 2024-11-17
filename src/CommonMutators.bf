@@ -1,19 +1,28 @@
 using System;
+using Playground.Data.Record;
 namespace Playground;
 
 class CommonMutators
 {
+	[Comptime]
+	static String DomainFor(Type t, bool byRef, String def = "Pos3f") {
+		var name = t.GetName(..new .());
+		if (name == "T")
+			name = def;
+		return new $"domain.For(\"{byRef? "ref " : ""}{name}\")";
+	}
+
 	public static void AdvanceMotion(RecordDomain domain, float dt) {
-		domain.For<Pos3f, Vel3f>(scope (pos, vel) => pos += vel*dt, restructured: false);
+		domain.For("ref Pos3f, Vel3f").Run(scope (pos, vel) => pos += vel*dt);
 	}
 
-	public static void Dampen<T>(RecordDomain domain, float dt, float strength) where T: IComponent, operator T*float {
+	public static void Dampen<T>(RecordDomain domain, float dt, float strength) where T: IComponent, var {
 		let d = Math.Exp(-dt*strength);
-		domain.For<T>(scope (vel) => vel *= d, restructured: false);
+		Compiler.Mixin(scope $"{DomainFor(typeof(T), true)}.Run(scope (vel) => vel *= d);");
 	}
 
-	public static void Add<T>(RecordDomain domain, float dt, T offset) where T: IComponent, var {
+	public static void Add<T>(RecordDomain domain, float dt, T offset) where T: IComponent, operator T*float, var {
 		let dp = offset*dt;
-		domain.For<T>(scope (p) => p += dp, restructured: false);
+		Compiler.Mixin(scope $"{DomainFor(typeof(T), true)}.Run(scope (p) => p += dp);");
 	}
 }

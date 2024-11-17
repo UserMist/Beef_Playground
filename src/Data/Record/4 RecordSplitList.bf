@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-namespace Playground;
+namespace Playground.Data.Record;
 
 /// SoA list for Record. It's a high-performance data structure, which allows marking for addition and removal (finished after refresh).
 public class RecordSplitList
@@ -116,7 +116,7 @@ public class RecordSplitList
 		return true;
 	}
 
-	public bool MarkToAddWithoutResizing(params Span<Component> components) {
+	public bool AddWithoutResize(params Span<Component> components) {
 		if (count < Capacity) {
 			Set(count++, params components);
 			return true;
@@ -124,7 +124,7 @@ public class RecordSplitList
 		return false;
 	}
 
-	public bool MarkToRemove(int idx) {
+	public bool Remove(int idx) {
 		if (idx < count) {
 			removalQueue.Add(idx);
 			return true;

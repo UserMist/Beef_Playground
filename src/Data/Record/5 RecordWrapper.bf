@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-namespace Playground;
+namespace Playground.Data.Record;
 
 class RecordWrapper
 {

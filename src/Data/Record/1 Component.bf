@@ -1,5 +1,5 @@
 using System;
-namespace Playground;
+namespace Playground.Data.Record;
 
 public struct Component: this(Component.Type.Key typeKey, Variant value), IDisposable, IComponent.Type
 {

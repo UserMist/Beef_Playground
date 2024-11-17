@@ -1,5 +1,5 @@
 using System;
-namespace Playground;
+namespace Playground.Data.Record;
 
 public interface IComponent
 {

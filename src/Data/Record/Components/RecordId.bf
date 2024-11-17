@@ -1,5 +1,5 @@
 using System;
-namespace Playground;
+namespace Playground.Data.Record.Components;
 
 public struct RecordId: this(Guid guid), IComponent, IHashable
 {
