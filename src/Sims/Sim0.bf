@@ -34,13 +34,10 @@ class Sim0: ISim
 	public this() {
 		let n = 13;
 
-		List<RecordId> ids = scope .();
 		var avgP = float3(0,0);
 		var avgV = float3(0,0);
 		for (let i < n) {
-			let pos = float3(rand(), rand(), rand() * 0.01f)*0.5f;
-			let vel = float3(rand(), rand(), rand() * 0.01f)*0.4f;
-			ids.Add(domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos));
+			add(let vel);
 			avgV += vel;
 		}
 		domain.Refresh();
@@ -58,6 +55,12 @@ class Sim0: ISim
 
 	public ~this() {
 		Socket.Uninit();
+	}
+
+	private RecordId add(out float3 vel) {
+		let pos = float3(rand(), rand(), rand() * 0.01f)*0.5f;
+		vel = float3(rand(), rand(), rand() * 0.01f)*0.4f;
+		return domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos);
 	}
 
 	float t;
@@ -104,7 +107,6 @@ class Sim0: ISim
 				if (recId == recId2) return;
 				let dp = (pos - pos2);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
-				//vel += dp/len*(0.1f-len)*dt*0.1f;  vel *= 0.999f;
 				vel += dp/(len)*dt*-0.1f;
 			});
 		});
@@ -133,24 +135,32 @@ class Sim0: ISim
 		return acc;
 	}
 
-	var did = 0;
 
 	void ISim.Act(SDL2.SDL.KeyboardEvent event) {
+		var did = 0;
 		switch(event.keysym.scancode) {
 		case .Pageup:
 			domain.For("RecordId").Run(scope [&](id) => {
 				if (did++ > 0) return;
 				Console.WriteLine(id.guid.[Friend]mA.ToString(..scope .()));
-				domain.ChangeComponents(id, .Set(PlayerTag(15)));
+				domain.Change(id, .Set(PlayerTag(15)));
 			}, scope (table) => table.Excludes(PlayerTag.TypeKey));
-			did = 0;
 
 		case .PageDown:
 			domain.For("RecordId").Run(scope [&](id) => {
 				if (did++ > 0) return;
-				domain.ChangeComponents(id, .Remove<PlayerTag>());
+				domain.Change(id, .Remove<PlayerTag>());
 			}, scope (table) => table.Includes(PlayerTag.TypeKey));
-			did = 0;
+
+		case .Insert:
+			add(?);
+			Console.WriteLine(domain.Count);
+
+		case .Delete:
+			domain.For("RecordId").Run(scope [&](id) => {
+				if (did++ > 0) return;
+				domain.Remove(id);
+			});
 
 		case .L:
 			var i = 0;

@@ -11,6 +11,14 @@ public class RecordDomain
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
 	public int DefaultCapacityPerChunk = 256;
 
+	public int Count {
+		get {
+			var c = 0;
+			for (let table in tables) c += table.Count;
+			return c;
+		}
+	}
+
 	public void ForTables(delegate void(RecordTable) method) {
 		for (let table in tables)
 			method(table);
@@ -50,7 +58,7 @@ public class RecordDomain
 			=> .() { typeKey = T.TypeKey };
 	}
 
-	public bool ChangeComponents(RecordId id, params Span<Change> changes) {
+	public bool Change(RecordId id, params Span<Change> changes) {
 		for (let table in tables) if (table.indexing.TryGetValue(id, let indexing)) {
 			let chunk = table.[Friend]chunks[indexing.0];
 			var components = new List<Component>(chunk.header.Count + changes.Length); defer delete components;

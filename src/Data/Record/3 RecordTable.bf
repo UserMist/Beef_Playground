@@ -13,6 +13,14 @@ public class RecordTable
 	private List<RecordSplitList> chunks;
 	public Dictionary<RecordId, (int, int)> indexing;
 	public int CapacityPerChunk => chunks[0].Capacity;
+	
+	public int Count {
+		get {
+			var c = 0;
+			for (let chunk in chunks) c += chunk.Count;
+			return c;
+		}
+	}
 
 	public ~this() {
 		DeleteContainerAndItems!(chunks);

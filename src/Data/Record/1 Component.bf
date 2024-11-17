@@ -39,7 +39,7 @@ public struct Component: this(Component.Type.Key typeKey, Variant value), IDispo
 			return headerSum;
 		}
 
-		public struct Key: this(uint16 value), IHashable, IComponent.Type
+		public struct Key: this(uint32 value), IHashable, IComponent.Type
 		{
 			[Inline]
 			public int GetHashCode()
@@ -52,7 +52,7 @@ public struct Component: this(Component.Type.Key typeKey, Variant value), IDispo
 }
 
 [AttributeUsage(.Struct)]
-public struct ComponentAttribute: this(uint16 typeKey), Attribute, IOnTypeInit
+public struct ComponentAttribute: this(uint32 typeKey), Attribute, IOnTypeInit
 {
 	[Comptime] public void OnTypeInit(Type type, Self* prev)
 		=> Compiler.EmitTypeBody(type, scope $"""
