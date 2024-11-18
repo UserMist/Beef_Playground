@@ -9,6 +9,8 @@ using Playground.Data.Record.Components; //required for codegen
 public class RecordDomain
 {
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
+	public Dictionary<Component.Type.Key, IRecordList> lists = new .() ~ DeleteDictionaryAndValues!(_);
+
 	public int DefaultCapacityPerChunk = 256;
 
 	public int Count {
@@ -121,43 +123,6 @@ public class RecordDomain
 			return true;
 		}
 	}
-
-	//private static delegate bool(RecordTable) emptyFilter = (new (table) => true) ~ delete _;
-
-	/*
-	[OnCompile(.TypeInit), Comptime]
-	static void Emit_VariadicFor() {
-		let begin = "{";
-		let end = "}";
-		let code = new String(); defer delete code;
-
-		for (let step < RecordTable.[Friend]for_maxVariadicLength*2) if (step > 0) {
-			let g = RecordTable.[Friend]for_genStrings(step % 2 == 1, step / 2);
-			code += scope $"""
-
-				public void For<K,{g.genericArgs}>() {begin}
-
-				{end}
-
-				public void For<int,{g.genericArgs}>(delegate void({g.delegateArgs}) method, delegate bool({nameof(RecordTable)} table) selector = null, bool restructured = true){g.constraints} {begin}
-					for (let table in this.tables)
-						if ({g.includes}(selector == null || selector(table)))
-							table.For<{g.delegateGenericArgs}>(method, restructured);
-				{end}
-
-				public JobHandle ScheduleFor<{g.genericArgs}>(delegate void({g.delegateArgs}) method, int concurrency = 8, delegate bool({nameof(RecordTable)} table) selector = null, bool restructured = true){g.constraints} {begin}
-					let handle = JobHandle();
-					for (let table in this.tables)
-						if ({g.includes}(selector == null || selector(table)))
-							handle.events.Add(table.ScheduleFor<{g.delegateGenericArgs}>(method, concurrency, restructured));
-					return handle;
-				{end}
-
-			""";
-		}
-		Compiler.EmitTypeBody(typeof(Self), code);
-	}
-	*/
 	
 	public QueryBuilder<S> For<S>(S s) where S:const String
 		=> .(this);
@@ -177,6 +142,7 @@ public class RecordDomain
 			var signature = scope String();
 
 			let items = s.Split(',');
+			var ordinalName = scope String();
 			for (var typeName in items) {
 				if (s.IsEmpty) break;
 				typeName..Trim();
@@ -187,8 +153,13 @@ public class RecordDomain
 					signature += ", ";
 				}
 
-				signature += typeName;
+				if (typeName.EndsWith("Ordinal")) {
+					Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per record is allowed");
+					ordinalName.Set(typeName);
+				}
+
 				let byRef = typeName.StartsWith("ref ");
+				signature += typeName;
 
 				if (byRef) { typekeys += scope $"{typeName.Substring(4)}.TypeKey"; }
 				else { typekeys += scope $"{typeName}.TypeKey"; }
@@ -196,7 +167,31 @@ public class RecordDomain
 
 			let begin = "{";
 			let end = "}";
+
+			let ordinalCode = scope $"""
+
+				// Run //
+				
+				public void Run(delegate void({signature}) method) {begin}
+					if (domain.lists.TryGetValue({ordinalName}.TypeKey, let list))
+						list.For("{s}").Run(method);
+				{end}
+
+				// Schedule //
+				
+				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {begin}
+					let handle = JobHandle();
+					if (domain.lists.TryGetValue({ordinalName}.TypeKey, let list))
+						handle.events.Add(list.For("{s}").Schedule(method, concurrency));
+					return handle;
+				{end}
+
+			""";
+
 			let code = scope $"""
+
+				// Run //
+
 				public void Run(delegate void({signature}) method) {begin}
 					for (let table in domain.tables)
 						if (table.Includes({typekeys}))
@@ -208,6 +203,8 @@ public class RecordDomain
 						if (table.Includes({typekeys}) && selector(table))
 							table.For("{s}").Run(method);
 				{end}
+
+				// Schedule //
 			
 				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {begin}
 					let handle = JobHandle();
@@ -224,9 +221,10 @@ public class RecordDomain
 							handle.events.Add(table.For("{s}").Schedule(method, concurrency));
 					return handle;
 				{end}
+
 			""";
 
-			Compiler.EmitTypeBody(typeof(Self), code);
+			Compiler.EmitTypeBody(typeof(Self), ordinalName.IsEmpty? code : ordinalCode);
 		}
 	}
 }

@@ -8,12 +8,10 @@ using Playground.Data.Record.Components; //required for codegen
 /// A subset of RecordDomain. All records in it have same composition.
 public class RecordTable
 {
-	const int for_maxVariadicLength = 12;
-	
 	private List<RecordSplitList> chunks;
 	public Dictionary<RecordId, (int, int)> indexing;
 	public int CapacityPerChunk => chunks[0].Capacity;
-	
+
 	public int Count {
 		get {
 			var c = 0;
@@ -46,6 +44,7 @@ public class RecordTable
 	public bool SetRecord(RecordId id, params Span<Component> components) {
 		if (indexing.TryGetValue(id, let v)) {
 			chunks[v.0].Set(v.1, params components);
+			return true;
 		}
 		return false;
 	}
@@ -164,123 +163,6 @@ public class RecordTable
 			return true;
 		}
 	}
-
-	/*
-	[OnCompile(.TypeInit), Comptime]
-	private static void for_variadic() {
-		String begin = "{";
-		String end = "}";
-		String code = new .(); defer delete code;
-
-		for (let step < for_maxVariadicLength*2) {
-			if (step == 0) continue;
-			
-			let g = for_genStrings(step % 2 == 1, step / 2);
-			//String noshow = step == 0? "[NoShow]" : "";
-
-			code += scope $"""
-
-				public void For{g.genericArgs}(delegate void({g.delegateArgs}) method, bool restructured = true){g.constraints} {begin}
-					defer {begin} if (restructured) this.Refresh(); {end}
-					for (let chunkIdx < this.chunks.Count) {begin}
-						let chunk = this.chunks[chunkIdx];{g.spanInits}
-						let c = chunk.Count;
-						for (let i < c)
-							method({g.spanArgs});
-					{end}
-				{end}
-
-				public JobHandle ScheduleFor{g.genericArgs}(delegate void({g.delegateArgs}) method, int concurrency = 8, bool restructured = true){g.constraints} {begin}
-					let handle = JobHandle();
-
-					var totalC = 0;
-					for (let chunk in this.chunks)
-						totalC += chunk.Count;
-					let delta = totalC/concurrency;
-					let remainder = totalC - delta*concurrency;
-		
-					var start = 0;
-					var end = remainder + delta;
-					for (let itemId < concurrency) {begin}
-						let event = handle.events.Add(..new WaitEvent());
-						ThreadPool.QueueUserWorkItem(new () => {begin}
-							var lStart = start;
-							var lEnd = end;
-							for (let chunk in this.chunks) {begin}
-								defer {begin}
-									lStart -= chunk.Count;
-									lEnd -= chunk.Count;
-								{end}
-								if (lEnd <= 0) break;
-								if (lStart >= chunk.Count) continue;
-								let c = Math.Min(lEnd, chunk.Count);{g.spanInits}
-								for (var i = lStart; i < c; i++)
-									method({g.spanArgs});
-							{end}
-							event.Set();
-						{end});
-						start = end;
-						end = start + delta;
-					{end}
-					return handle;
-				{end}
-			""";
-		}
-
-		Compiler.EmitTypeBody(typeof(Self), code);
-	}
-
-	private static (String genericArgs, String delegateArgs, String constraints, String spanInits, String spanArgs, String delegateGenericArgs, String includes)
-	for_genStrings(bool includeRecId, int otherCount) {
-		String genericArgs = new .();
-		String delegateArgs = new .();
-		String constraints = new .();
-		String spanInits = new .();
-		String spanArgs = new .();
-		String delegateGenericArgs = new .();
-		String includes = new .();
-		
-		if (includeRecId) {
-			delegateArgs += scope $"in RecordId recId";
-			spanInits += scope $"\n\t\t\tlet recIds = chunk.Span<RecordId>();";
-			spanArgs += "recIds[i]";
-		}
-
-		if (otherCount > 0)
-			includes += "table.Includes(";
-
-		for (let n < otherCount) {
-			if (n > 0) {
-				genericArgs += ", ";
-				delegateGenericArgs += ", ";
-				includes += ", ";
-			}
-
-			if (n > 0 || includeRecId) {
-				delegateArgs += ", ";
-				spanArgs += ", ";
-			}
-
-			genericArgs += scope $"K{n}";
-			delegateGenericArgs += scope $"K{n}";
-			delegateArgs += scope $"ref K{n}";
-			constraints += scope $"\n\twhere K{n}: IComponent";
-			spanInits += scope $"\n\t\t\tlet span{n} = chunk.Span<K{n}>();";
-			spanArgs += scope $"ref span{n}[i]";
-			includes += scope $"K{n}.TypeKey";
-		}
-
-		if (otherCount > 0)
-			includes += ") && ";
-
-		/*if (includeRecId) {
-			genericArgs.Insert(0, "Ids");
-			delegateGenericArgs.Insert(0, "Ids");
-		}*/
-
-		return (genericArgs, delegateArgs, constraints, spanInits, spanArgs, delegateGenericArgs, includes);
-	}*/
-
 	
 	public QueryBuilder<S> For<S>(S s) where S:const String
 		=> .(this);
@@ -313,7 +195,6 @@ public class RecordTable
 					args += ", ";
 				}
 				
-
 				signature += typeName;
 
 				let byRef = typeName.StartsWith("ref ");
@@ -329,6 +210,8 @@ public class RecordTable
 			let begin = "{";
 			let end = "}";
 			let code = scope $"""
+
+				// Run //
 				
 				public void Run(delegate void({signature}) method) {begin}
 					defer {begin} table.Refresh(); {end}
@@ -339,6 +222,8 @@ public class RecordTable
 							method({args});
 					{end}
 				{end}
+
+				// Schedule //
 
 				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {begin}
 					let handle = JobHandle();
@@ -363,9 +248,11 @@ public class RecordTable
 								{end}
 								if (lEnd <= 0) break;
 								if (lStart >= chunk.Count) continue;
-								let c = Math.Min(lEnd, chunk.Count);{spanInits}
-								for (var i = lStart; i < c; i++)
+								let c0 = Math.Max(lStart, 0);
+								let c1 = Math.Min(lEnd, chunk.Count);{spanInits}
+								for (var i = c0; i < c1; i++) {begin}
 									method({args});
+								{end}
 							{end}
 							event.Set();
 						{end});

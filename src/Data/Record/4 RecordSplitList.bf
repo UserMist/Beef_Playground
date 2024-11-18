@@ -204,9 +204,6 @@ public class RecordSplitList
 		Count = count;
 	}
 
-	public struct ComponentDescription: this(Component.Type componentType, int binarySpanStart, int binarySpanLength)
-	{
-
-	}
+	public struct ComponentDescription: this(Component.Type componentType, int binarySpanStart, int binarySpanLength) { }
 }
 

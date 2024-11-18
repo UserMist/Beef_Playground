@@ -1,19 +1,18 @@
 using System;
 using System.Collections;
+using Playground.Data.Record.Components;
 namespace Playground.Data.Record;
 
-interface IUniformRecords
+interface IRecordList
 {
 	int Count { get; }
 	void GetHeader(List<IComponent.Type> types);
 	bool HasOnly(params Span<IComponent.Type> types);
 	bool Includes(params Span<IComponent.Type> types);
 	bool Excludes(params Span<IComponent.Type> types);
-}
 
-interface IRecordList: IUniformRecords
-{
-	void GetPtrAndStride(IComponent.Type type, out void* ptr, out int stride);
+	int ChunkCount { get; }
+	void GetPtrAndStride(IComponent.Type type, int chunkIdx, out void* ptr, out int stride);
 
 	/*
 	void GetStridedSpan<T>(out StridedSpan<T> span) where T: IComponent, ValueType {
@@ -21,17 +20,16 @@ interface IRecordList: IUniformRecords
 		span = .(ptr, stride, ((IUniformRecords) this).Count);
 	}
 	*/
-
-	Component? Add(bool resizeAllowed, params Span<Component> values)
+	
+	RecordId Add(bool resizeAllowed, params Span<Component> values)
 		=> ThrowUnimplemented();
 
-	bool Remove(Component primaryKey, bool instantly = false, bool destroy = true)
+	bool Remove(RecordId id, bool destroy = true)
 		=> ThrowUnimplemented();
-}
 
-interface IRecordTable: IUniformRecords
-{
-	void GetStrider() {
+	void AddLast(bool resizeAllowed, params Span<Component> values)
+		=> ThrowUnimplemented();
 
-	}
+	void Remove(int id, bool destroy = true)
+		=> ThrowUnimplemented();
 }
