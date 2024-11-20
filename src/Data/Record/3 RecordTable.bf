@@ -180,15 +180,12 @@ public class RecordTable
 	{
 		[OnCompile(.TypeInit), Comptime]
 		static void emit() {
-			let s = S == null? "RecordId" : S;
-
+			let signature = S == null? "RecordId" : S;
 			var typekeys = scope String();
-			var signature = scope String();
 			var args = scope String();
 			var spanInits = scope String();
 
-			var items = s.Split(',');
-			if (!s.IsEmpty) for (var typeName in items) {
+			if (!signature.IsEmpty) for (var typeName in signature.Split(',')) {
 				let idx = @typeName.Pos;
 				typeName..Trim();
 				let byRef = typeName.StartsWith("ref ");
@@ -196,17 +193,15 @@ public class RecordTable
 
 				if (idx > 0) {
 					typekeys += ", ";
-					signature += ", ";
 					args += ", ";
 				}
 				
 				typekeys += scope $"{typeNameNaked}.TypeKey";
-				signature += typeName;
 				args += scope $"{byRef? "ref " : ""}span{idx}[i]";
 				spanInits += scope $"\n\t\t\tlet span{idx} = chunk.Span<{typeNameNaked}>();";
 			}
 			
-				let code = scope $"""
+			let code = scope $"""
 	
 					// Run //
 					
