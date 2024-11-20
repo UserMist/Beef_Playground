@@ -57,7 +57,10 @@ public class RecordTable
 	}
 
 	public RecordId Add(params Span<Component> components) {
-		return add(..RecordId(), params components);
+		var id = RecordId();
+		while (indexing.ContainsKey(id))
+			id = RecordId();
+		return add(..id, params components);
 	}
 
 	public bool Add(RecordId id, params Span<Component> components) {
@@ -114,6 +117,7 @@ public class RecordTable
 				indexing.Remove(idSpan[k1]);
 				removalStart = Math.Min(removalStart, k1);
 			}
+
 			chunk.Refresh();
 
 			for (var i = removalStart; i < chunk.Count; i++) {
@@ -140,6 +144,10 @@ public class RecordTable
 	public bool Includes()
 		=> true;
 
+	[Inline]
+	public bool Excludes()
+		=> true;
+
 	public bool Includes<T>(params Span<T> header) where T: IComponent.Type
 		=> chunks[0].Includes<T>(params header);
 
@@ -151,6 +159,7 @@ public class RecordTable
 
 	public struct JobHandle
 	{
+		public RecordTable table;
 		public List<WaitEvent> events = new .();
 
 		public bool WaitFor(int waitMS = -1) {
@@ -171,96 +180,83 @@ public class RecordTable
 	{
 		[OnCompile(.TypeInit), Comptime]
 		static void emit() {
-			var s = scope String();
-			if (S == null) {
-				s.Set("RecordId");
-			} else {
-				s.Set(S);
-			}
+			let s = S == null? "RecordId" : S;
 
 			var typekeys = scope String();
 			var signature = scope String();
 			var args = scope String();
 			var spanInits = scope String();
 
-			let items = s.Split(',');
-			for (var typeName in items) {
-				if (s.IsEmpty) break;
+			var items = s.Split(',');
+			if (!s.IsEmpty) for (var typeName in items) {
+				let idx = @typeName.Pos;
 				typeName..Trim();
+				let byRef = typeName.StartsWith("ref ");
+				let typeNameNaked = byRef? typeName.Substring(4)..TrimStart() : typeName;
 
-				if (@typeName.Pos == 0) {
-				} else {
+				if (idx > 0) {
 					typekeys += ", ";
 					signature += ", ";
 					args += ", ";
 				}
 				
+				typekeys += scope $"{typeNameNaked}.TypeKey";
 				signature += typeName;
-
-				let byRef = typeName.StartsWith("ref ");
-				typeName = typeName.Substring(byRef? 4 : 0);
-
-				args += scope $"{byRef? "ref " : ""}span{@typeName.Pos}[i]";
-
-				spanInits += scope $"\n\t\t\tlet span{@typeName.Pos} = chunk.Span<{typeName}>();";
-				if (byRef) { typekeys += scope $"{typeName.Substring(4)}.TypeKey"; }
-				else { typekeys += scope $"{typeName}.TypeKey"; }
+				args += scope $"{byRef? "ref " : ""}span{idx}[i]";
+				spanInits += scope $"\n\t\t\tlet span{idx} = chunk.Span<{typeNameNaked}>();";
 			}
-
-			let begin = "{";
-			let end = "}";
-			let code = scope $"""
-
-				// Run //
-				
-				public void Run(delegate void({signature}) method) {begin}
-					defer {begin} table.Refresh(); {end}
-					for (let chunkIdx < table.chunks.Count) {begin}
-						let chunk = table.chunks[chunkIdx];{spanInits}
-						let c = chunk.Count;
-						for (let i < c)
-							method({args});
-					{end}
-				{end}
-
-				// Schedule //
-
-				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {begin}
-					let handle = JobHandle();
+			
+				let code = scope $"""
 	
-					var totalC = 0;
-					for (let chunk in table.chunks)
-						totalC += chunk.Count;
-					let delta = totalC/concurrency;
-					let remainder = totalC - delta*concurrency;
+					// Run //
+					
+					public void Run(delegate void({signature}) method) {{
+						for (let chunkIdx < table.chunks.Count) {{
+							let chunk = table.chunks[chunkIdx];{spanInits}
+							let c = chunk.Count;
+							for (let i < c)
+								method({args});
+						}}
+					}}
 	
-					var start = 0;
-					var end = remainder + delta;
-					for (let itemId < concurrency) {begin}
-						let event = handle.events.Add(..new WaitEvent());
-						ThreadPool.QueueUserWorkItem(new () => {begin}
-							var lStart = start;
-							var lEnd = end;
-							for (let chunk in table.chunks) {begin}
-								defer {begin}
-									lStart -= chunk.Count;
-									lEnd -= chunk.Count;
-								{end}
-								if (lEnd <= 0) break;
-								if (lStart >= chunk.Count) continue;
-								let c0 = Math.Max(lStart, 0);
-								let c1 = Math.Min(lEnd, chunk.Count);{spanInits}
-								for (var i = c0; i < c1; i++) {begin}
-									method({args});
-								{end}
-							{end}
-							event.Set();
-						{end});
-						start = end;
-						end = start + delta;
-					{end}
+					// Schedule //
+	
+					public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {{
+						let handle = JobHandle();
+		
+						var totalC = 0;
+						for (let chunk in table.chunks)
+							totalC += chunk.Count;
+						let delta = totalC/concurrency;
+						let remainder = totalC - delta*concurrency;
+		
+						var start = 0;
+						var end = remainder + delta;
+						for (let itemId < concurrency) {{
+							let event = handle.events.Add(..new WaitEvent());
+							ThreadPool.QueueUserWorkItem(new () => {{
+								var lStart = start;
+								var lEnd = end;
+								for (let chunk in table.chunks) {{
+									defer {{
+										lStart -= chunk.Count;
+										lEnd -= chunk.Count;
+									}}
+									if (lEnd <= 0) break;
+									if (lStart >= chunk.Count) continue;
+									let c0 = Math.Max(lStart, 0);
+									let c1 = Math.Min(lEnd, chunk.Count);{spanInits}
+									for (var i = c0; i < c1; i++) {{
+										method({args});
+									}}
+								}}
+								event.Set();
+							}});
+							start = end;
+							end = start + delta;
+					}}
 					return handle;
-				{end}
+				}}
 
 			""";
 

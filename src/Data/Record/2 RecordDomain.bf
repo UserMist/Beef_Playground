@@ -8,10 +8,13 @@ using Playground.Data.Record.Components; //required for codegen
 /// Collection of records with varying component compositions. Each record at least has a RecordId component.
 public class RecordDomain
 {
+	public int DefaultCapacityPerChunk = 256;
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
+	private Dictionary<Query, List<RecordTable>> queryCache = new .() ~ DeleteDictionaryAndValues!(_);
+	bool invalidateQueryCache = false;
+
 	public Dictionary<Component.Type.Key, IRecordList> lists = new .() ~ DeleteDictionaryAndValues!(_);
 
-	public int DefaultCapacityPerChunk = 256;
 
 	public int Count {
 		get {
@@ -34,7 +37,7 @@ public class RecordDomain
 
 	public RecordId Add(params Span<Component> components) {
 		Component.Type[] rawTypes = scope .[components.Length+1];
-		rawTypes[0] = .Create<RecordId>();
+		rawTypes[0] = RecordId.AsType;
 		for (let i < components.Length)
 			rawTypes[i + 1] = components[i];
 		return reserveTable<Component.Type>(params rawTypes).Add(params components);
@@ -86,6 +89,9 @@ public class RecordDomain
 	}
 
 	private bool transfer(RecordId id, RecordTable from, Span<Component> components) {
+		let index = from.indexing[id];
+		Runtime.Assert(!from.[Friend]chunks[index.0].[Friend]removalQueue.Contains(index.1), "Attempted to change components of absent record");
+
 		let table2 = reserveTable<Component>(params components);
 		if (!table2.Add(id, params components)) {
 			return false;
@@ -101,18 +107,28 @@ public class RecordDomain
 		for (let table in tables) if (table.HasOnly<T>(params rawComponents)) {
 			return table;
 		}
+
+		invalidateQueryCache = true;
 		return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
 	}
 
 	public void Refresh() {
 		for (let table in tables)
 			table.Refresh();
+
+		if (invalidateQueryCache) {
+			for (let cachedList in queryCache.Values)
+				delete cachedList;
+			
+			queryCache.Clear();
+			invalidateQueryCache = false;
+		}
 	}
 
 	public struct JobHandle
 	{
 		public List<RecordTable.JobHandle> events = new .();
-		public Object obj;
+		public RecordDomain domain;
 
 		public bool WaitFor(int waitMS = -1) {
 			while (events.Count > 0) {
@@ -124,107 +140,199 @@ public class RecordDomain
 		}
 	}
 	
+	private struct Query: IHashable
+	{
+		public List<Component.Type.Key> includes;
+		public List<Component.Type.Key> excludes = null;
+		public int64 hash;
+		public int64 keysum = 0;
+
+		public this(List<Component.Type.Key> inc, List<Component.Type.Key> exc) {
+			includes = inc..Sort(scope (a,b) => a.value<=>b.value);
+			if (exc != null)
+				excludes = exc..Sort(scope (a,b) => a.value<=>b.value);
+			for (let i in includes)
+				keysum += i.value;
+			hash = keysum;
+			if (excludes == null)
+				hash += int32.MaxValue;
+			else for (let i in excludes)
+				hash += i.value<<1;
+		}
+
+		public int GetHashCode()
+			=> hash;
+
+		public static bool operator ==(Query a, Query b) {
+			if ((a.includes.Count != b.includes.Count) || (a.excludes == null) != (b.excludes == null)) {
+				return false;
+			}
+			for (let i < a.includes.Count) if (a.includes[i] != b.includes[i]) {
+				return false;
+			}
+			if (a.excludes != null) for (let i < a.excludes.Count) if (a.excludes[i] != b.excludes[i]) {
+				return false;
+			}
+			return true;
+		}
+
+		public void StaticDispose() {
+			delete includes;
+			delete excludes;
+		}
+	}
+	
 	public QueryBuilder<S> For<S>(S s) where S:const String
 		=> .(this);
 
 	public struct QueryBuilder<S>: this(RecordDomain domain) where S: const String
 	{
+
 		[OnCompile(.TypeInit), Comptime]
 		static void emit() {
-			var s = scope String();
-			if (S == null) {
-				s.Set("");
-			} else {
-				s.Set(S);
-			}
+			let s = S == null? "RecordId" : S;
 
-			var typekeys = scope String();
-			var signature = scope String();
+			var excludeOtherTypeNames = false;
+			var includedTypeNames = scope List<StringView>(), excludedTypeNames = scope List<StringView>();
 
-			let items = s.Split(',');
+			var filterIdx = s.IndexOfAny(scope char8[2]('+', '-'));
+			var signature = s.Substring(0, filterIdx < 0? s.Length : filterIdx);
 			var ordinalName = scope String();
-			for (var typeName in items) {
-				if (s.IsEmpty) break;
+			if (!s.IsEmpty) for (var typeName in signature.Split(',')) {
 				typeName..Trim();
-
-				if (@typeName.Pos == 0) {
-				} else {
-					typekeys += ", ";
-					signature += ", ";
-				}
-
-				if (typeName.EndsWith("Ordinal")) {
-					Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per record is allowed");
-					ordinalName.Set(typeName);
-				}
-
 				let byRef = typeName.StartsWith("ref ");
-				signature += typeName;
+				let typeNameNaked = byRef? typeName.Substring(4)..TrimStart() : typeName;
 
-				if (byRef) { typekeys += scope $"{typeName.Substring(4)}.TypeKey"; }
-				else { typekeys += scope $"{typeName}.TypeKey"; }
+				if (typeNameNaked.EndsWith("Ordinal")) {
+					Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per record is allowed");
+					ordinalName.Set(typeNameNaked);
+				}
+				includedTypeNames.Add(typeNameNaked);
 			}
 
-			let begin = "{";
-			let end = "}";
+			var ordinalInFilter = false;
+			while (filterIdx >= 0 && filterIdx < s.Length) {
+				var filterEnd = s.IndexOfAny(scope char8[2]('+', '-'), filterIdx + 1);
+				if (filterEnd < 0) filterEnd = s.Length;
 
-			let ordinalCode = scope $"""
+				let item = s[filterIdx..<filterEnd]..Trim();
+				if (item.StartsWith('+')) {
+					if (item.EndsWith("Ordinal")) {
+						Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per record is allowed");
+						ordinalName.Set(item);
+						ordinalInFilter = true;
+					}
+					includedTypeNames.Add(item.Substring(1));
+				} else if (item.StartsWith("-*")) {
+					excludeOtherTypeNames = true;
+				} else if (item.StartsWith('-')) {
+					excludedTypeNames.Add(item.Substring(1));
+				}
 
-				// Run //
-				
-				public void Run(delegate void({signature}) method) {begin}
-					if (domain.lists.TryGetValue({ordinalName}.TypeKey, let list))
-						list.For("{s}").Run(method);
-				{end}
+				filterIdx = filterEnd + 1;
+			}
 
-				// Schedule //
-				
-				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {begin}
-					let handle = JobHandle();
-					if (domain.lists.TryGetValue({ordinalName}.TypeKey, let list))
-						handle.events.Add(list.For("{s}").Schedule(method, concurrency));
-					return handle;
-				{end}
+			signature..TrimEnd();
+			let code = new String(); defer delete code;
+			snippetQuerying(code, includedTypeNames, excludeOtherTypeNames? null : excludedTypeNames);
+			if (ordinalName.IsEmpty) {
+				code += "\n\t// Run //\n";
+				snippetRun(code, signature, false);
+				snippetRun(code, signature, true);
+				code += "\n\t// Schedule //\n";
+				snippetSchedule(code, signature, false);
+				snippetSchedule(code, signature, true);
+			} else {
+				code += scope $"""
+	
+					// Run //
+					
+					public void Run(delegate void({signature}) method) {{
+						if (domain.lists.TryGetValue({ordinalName}.TypeKey, let list))
+							list.For("{signature}").Run(method);
+					}}
+	
+					// Schedule //
+					
+					public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {{
+						let handle = JobHandle() {{ domain = domain }};
+						if (domain.lists.TryGetValue({ordinalName}.TypeKey, let list))
+							handle.events.Add(list.For("{signature}").Schedule(method, concurrency));
+						return handle;
+					}}
+	
+				""";
+			}
+			Compiler.EmitTypeBody(typeof(Self), code);
+		}
+
+		[Comptime]
+		private static void snippetQuerying(String code, List<StringView> includedTypeNames, List<StringView> excludedTypeNames) {
+			let incList = snippetNewQueryList(..scope String(), includedTypeNames);
+			let excList = excludedTypeNames == null? scope $"null" : snippetNewQueryList(..scope String(), excludedTypeNames);
+			let filter = scope String();
+			if (excludedTypeNames == null) {
+				filter.Set("table.HasOnly(params includes)");
+			} else if (excludedTypeNames.Count == 0) {
+				filter.Set("table.Includes(params includes)");
+			} else {
+				filter.Set("table.Includes(params includes) && table.Excludes(params excludes)");
+			}
+			code += scope $"""
+
+				private static List<Component.Type.Key> includes = {incList};
+				private static List<Component.Type.Key> excludes = {excList};
+				private static Query query = .(includes, excludes) ~ _.StaticDispose();
+				private List<{nameof(RecordTable)}> getTables() {{
+					if (!domain.[Friend]queryCache.TryGetValue(query, var tables)) {{
+						tables = new .();
+						domain.[Friend]queryCache[query] = tables;
+						for (let table in domain.tables) if ({filter}) tables.Add(table);
+					}}
+					return tables;
+				}}
 
 			""";
+		}
+		
+		[Comptime]
+		private static void snippetNewQueryList(String str, List<StringView> list) {
+			str += "new List<Component.Type.Key>(){";
+			for (let i in list) {
+				if (@i.Index > 0) str += ", ";
+				str += scope $"{i}.TypeKey";
+			}
+			str += "}";
+		}
 
-			let code = scope $"""
+		[Comptime]
+		private static void snippetRun(String code, StringView signature, bool useSelector) {
+			let selectorArg  = !useSelector? "" : ", delegate bool(RecordTable table) selector";
+			let selectorCond = !useSelector? "" : " if (selector(table))";
+			code += scope $"""
 
-				// Run //
-
-				public void Run(delegate void({signature}) method) {begin}
-					for (let table in domain.tables)
-						if (table.Includes({typekeys}))
-							table.For("{s}").Run(method);
-				{end}
-
-				public void Run(delegate void({signature}) method, delegate bool({nameof(RecordTable)} table) selector) {begin}
-					for (let table in domain.tables)
-						if (table.Includes({typekeys}) && selector(table))
-							table.For("{s}").Run(method);
-				{end}
-
-				// Schedule //
-			
-				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {begin}
-					let handle = JobHandle();
-					for (let table in domain.tables)
-						if (table.Includes({typekeys}))
-							handle.events.Add(table.For("{s}").Schedule(method, concurrency));
-					return handle;
-				{end}
-
-				public JobHandle Schedule(delegate void({signature}) method, delegate bool({nameof(RecordTable)} table) selector, int concurrency = 8) {begin}
-					let handle = JobHandle();
-					for (let table in domain.tables)
-						if (table.Includes({typekeys}) && selector(table))
-							handle.events.Add(table.For("{s}").Schedule(method, concurrency));
-					return handle;
-				{end}
+				public void Run(delegate void({signature}) method{selectorArg}) {{
+					let tables = getTables();
+					for (let table in tables){selectorCond} table.For("{signature}").Run(method);
+				}}
 
 			""";
+		}
 
-			Compiler.EmitTypeBody(typeof(Self), ordinalName.IsEmpty? code : ordinalCode);
+		[Comptime]
+		private static void snippetSchedule(String code, StringView signature, bool useSelector) {
+			let selectorArg  = !useSelector? "" : ", delegate bool(RecordTable table) selector";
+			let selectorCond = !useSelector? "" : " if (selector(table))";
+			code += scope $"""
+
+				public JobHandle Schedule(delegate void({signature}) method{selectorArg}, int concurrency = 8) {{
+					let handle = JobHandle() {{ domain = domain }};
+					let tables = getTables();
+					for (let table in tables){selectorCond} handle.events.Add(table.For("{signature}").Schedule(method, concurrency));
+					return handle;
+				}}
+
+			""";
 		}
 	}
 }

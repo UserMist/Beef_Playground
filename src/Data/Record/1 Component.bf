@@ -57,6 +57,7 @@ public struct ComponentAttribute: this(uint32 typeKey), Attribute, IOnTypeInit
 	[Comptime] public void OnTypeInit(Type type, Self* prev)
 		=> Compiler.EmitTypeBody(type, scope $"""
 		public static Component.Type.Key TypeKey => .({typeKey});
+		public static Component.Type AsType => .Create<{type.GetName(..scope .())}>();
 		public static implicit operator Component(Self v) => .Create(v);
 		""");
 }
