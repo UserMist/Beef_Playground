@@ -15,6 +15,32 @@ namespace Playground.Data.Record.Components
 	public struct PlayerTag: this(int id), IComponent
 	{
 	}
+
+	[Component(515145)]
+	public struct GravEmitter: this(float v), IComponent
+	{
+	}
+
+	[Component(555145)]
+	public struct GravAbsorber: this(float v), IComponent
+	{
+	}
+
+	[Component(598777)]
+	public struct SelfDestruct: this(float t), IComponent
+	{
+
+	}
+
+	
+	[Component(55777)]
+	public struct Shield: this(float r), IComponent
+	{
+
+	}
+
+	[Component(4951)]
+	public struct Bullet: this(), IComponent {}
 }
 
 namespace Playground;
@@ -24,8 +50,8 @@ class Sim0: ISim
 	RecordDomain domain = new .() ~ delete _;
 
 	Random rng = new .(7) ~ delete _;
-	float rand() => .(rng.NextDouble()*2-1);
-	float rand(Random rng, float min = -1, float max = 1) => .(rng.NextDouble()*(max-min)+min);
+	float rand() => .(rng.NextDouble(-1,1));
+	float rand(Random rng, float min = -1, float max = 1) => .(rng.NextDouble(min,max));
 
 	IDumper dumper = new RawDumper(typeof(float3)) ~ delete _;
 	public NetWriter netWriter = new .(dumper) ~ delete _;
@@ -60,7 +86,7 @@ class Sim0: ISim
 	private RecordId add(out float3 vel) {
 		let pos = float3(rand(), rand(), rand() * 0.01f)*0.5f;
 		vel = float3(rand(), rand(), rand() * 0.01f)*0.4f;
-		return domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos);
+		return domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos, GravEmitter(1f), GravAbsorber(1f));
 	}
 
 	float t;
@@ -70,17 +96,19 @@ class Sim0: ISim
 		let cells = image.cells.Ptr;
 		let c = image.cells.Count;
 		for (let i < c) {
-			cells[i] = Lerp(cells[i], .(0.05f,0.02f,0.03f), 0.04f);
+			cells[i] = Lerp(cells[i], .(0.05f,0.02f,0.03f), 0.54f);
 		}
 
-		domain.For("Pos3f, Vel3f, ref OldPos3f").Run(scope (pos,vel,oldPos) => {
-			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), .All(0.5f));
+		let ratio = float(image.height)/image.width;
+
+		domain.For("Pos3f, Vel3f, ref OldPos3f -PlayerTag").Run(scope (pos,vel,oldPos) => {
+			image.DrawLine(pos*.(ratio,1), oldPos*.(ratio,1), .All(0.5f));
 			oldPos = pos;
-		}, scope (table) => table.Excludes(PlayerTag.TypeKey));
+		});
 
 		domain.For("Pos3f, Vel3f, ref OldPos3f, PlayerTag").Run(scope (pos,vel,oldPos,ply) => {
 			let rng = scope Random(ply.id);
-			image.DrawLine(pos*.(float(image.height)/image.width,1), oldPos*.(float(image.height)/image.width,1), .(rand(rng,0,1), rand(rng,0,1), rand(rng,0,1)));
+			image.DrawLine(pos*.(ratio,1), oldPos*.(ratio,1), .(rand(rng,0,1), rand(rng,0,1), rand(rng,0,1)));
 			oldPos = pos;
 
 			/*let r = 0.04f;
@@ -95,16 +123,30 @@ class Sim0: ISim
 				}
 			}*/
 		});
+
+		
+		domain.For("Shield, Pos3f").Run(scope (shield, pos) => {
+			var i = 0;
+			while (i < 16) {
+				let m = 2f/16 * Math.PI_f;
+				let p = pos + shield.r * float2(Math.Cos(i*m), Math.Sin(i*m));
+				i++;
+				let op = pos + shield.r * float2(Math.Cos(i*m), Math.Sin(i*m));
+				image.DrawLine(p*float2(ratio,1), op*float2(ratio,1), float3(0.2f,0.1f,0.5f));
+			}
+		});
 	}
 
 	void ISim.Advance(float dt) {
 		var dt;
 		dt *= 0.125f;
 
-		domain.For("RecordId,Pos3f,ref Vel3f,OldPos3f").Run(scope (recId,pos,vel,oldPos) => {
+		domain.Refresh();
+
+		domain.For("Pos3f,ref Vel3f,OldPos3f +GravAbsorber").Run(scope (pos,vel,oldPos) => {
 			vel *= Math.Exp(-0.1f*dt);
-			domain.For("RecordId,Pos3f,Vel3f,OldPos3f").Run(scope [&](recId2,pos2,vel2,oldPos2) => {
-				if (recId == recId2) return;
+			domain.For("Pos3f,Vel3f,OldPos3f +GravEmitter").Run(scope [&](pos2,vel2,oldPos2) => {
+				if (pos == pos2) return;
 				let dp = (pos - pos2);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
 				vel += dp/(len)*dt*-0.1f;
@@ -112,13 +154,38 @@ class Sim0: ISim
 		});
 
 		CommonMutators.AdvanceMotion(domain, dt);
-		CommonMutators.Dampen<Vel3f>(domain, dt, 0.5f);
+		CommonMutators.Lessen<Vel3f>(domain, dt, 2f);
+		CommonMutators.Shift<Vel3f>(domain, dt, .(0.1f, 0.2f, 0.f));
 
-		domain.For("Pos3f,ref Vel3f").Run(scope (pos,vel) => {
+		domain.For("ref Pos3f, ref Vel3f").Run(scope (pos,vel) => {
 			vel.x -= 0.05f*dt;
+			vel.z = 0;
+			pos.z = 0;
 			if (pos.x < -0.5f)
 				vel.x = Abs(vel.x);
 		});
+
+		domain.For("RecordId, ref SelfDestruct").Run(scope (id, s) => {
+			if ((s.t -= dt) <= 0)
+				domain.Remove(id);
+		});
+
+		domain.For("Shield, Pos3f").Run(scope (shield, pos) => {
+			domain.For("Pos3f, ref Vel3f").Run(scope (p,v) => {
+				let dp = p - pos;
+				if (len2(dp) < shield.r * shield.r) {
+					v += dp * dt * 1000;
+				}
+			});
+		});
+
+		domain.For("ref Vel3f, SelfDestruct, RecordId +Bullet").Run(scope (v,s,id) => {
+			v += float2(Math.Cos(s.t*600 + id.guid.GetHashCode()), Math.Sin(s.t*600 + id.guid.GetHashCode())) * dt * 40;
+		});
+	}
+
+	float len2(float3 v) {
+		return v.x*v.x + v.y*v.y + v.z*v.z;
 	}
 
 	float3 axis(SDL2.SDL.Scancode input, SDL2.SDL.Scancode w, SDL2.SDL.Scancode a, SDL2.SDL.Scancode s, SDL2.SDL.Scancode d) {
@@ -140,17 +207,18 @@ class Sim0: ISim
 		var did = 0;
 		switch(event.keysym.scancode) {
 		case .Pageup:
-			domain.For("RecordId").Run(scope [&](id) => {
+			domain.For("RecordId -PlayerTag").Run(scope [&](id) => {
 				if (did++ > 0) return;
 				Console.WriteLine(id.guid.[Friend]mA.ToString(..scope .()));
-				domain.Change(id, .Set(PlayerTag(15)));
-			}, scope (table) => table.Excludes(PlayerTag.TypeKey));
+				domain.Change(id, .Set(PlayerTag(15)), .Set(Shield(0.1f)));
+			});
 
 		case .PageDown:
-			domain.For("RecordId").Run(scope [&](id) => {
+			domain.For("RecordId +PlayerTag").Run(scope [&](id) => {
 				if (did++ > 0) return;
+				Console.WriteLine(id.guid.[Friend]mA.ToString(..scope .()));
 				domain.Change(id, .Remove<PlayerTag>());
-			}, scope (table) => table.Includes(PlayerTag.TypeKey));
+			});
 
 		case .Insert:
 			add(?);
@@ -209,11 +277,17 @@ class Sim0: ISim
 		default:
 		}
 
-		domain.For("ref Vel3f, PlayerTag").Run(scope (vel, tag) => {
+		Random rnd = scope .();
+		domain.For("ref Vel3f, Pos3f, PlayerTag").Run(scope (vel, pos, tag) => {
+			var acc = float3(0,0);
 			if (tag.id == 15) {
-				vel += axis(event.keysym.scancode, .W, .A, .S, .D) * 0.5f;
+				acc += axis(event.keysym.scancode, .W, .A, .S, .D) * 0.5f;
 			} else if (tag.id == 1) {
-				vel += axis(event.keysym.scancode, .Up, .Left, .Down, .Right) * 0.5f;
+				acc += axis(event.keysym.scancode, .Up, .Left, .Down, .Right) * 0.5f;
+			}
+			vel += acc;
+			if (acc != default) {
+				domain.Add(pos, (Vel3f)(vel - acc*10), (OldPos3f)(float3)pos, SelfDestruct(0.03f+rnd.Next(10)*0.01f), Bullet());
 			}
 		});
 	}
