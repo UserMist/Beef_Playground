@@ -3,9 +3,8 @@ namespace Playground;
 
 class ShapeTools
 {
-	/// UNDEFINED CASE: Intersection of line with parallel box wall.
+	/// UNDEFINED CASE: Intersection of line and box wall parallel to it.
 	public static bool RayBoxIntersection(float3 rayOrigin, float3 rayDirection, float3 boxMin, float3 boxMax, out float minDist, out float maxDist) {
-		//Multiplication is needed for it to register hits parallel to walls
 		float3 m = 1f/rayDirection;
 		var distsToMin = (boxMin - rayOrigin)*m;
 		var distsToMax = (boxMax - rayOrigin)*m;
