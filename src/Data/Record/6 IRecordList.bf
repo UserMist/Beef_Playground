@@ -3,7 +3,7 @@ using System.Collections;
 using Playground.Data.Record.Components;
 namespace Playground.Data.Record;
 
-interface IRecordList
+interface IRecordTable
 {
 	int Count { get; }
 	void GetHeader(List<IComponent.Type> types);
@@ -13,6 +13,8 @@ interface IRecordList
 
 	int ChunkCount { get; }
 	void GetPtrAndStride(IComponent.Type type, int chunkIdx, out void* ptr, out int stride);
+
+	public bool UsesStridedSpans => true;
 
 	/*
 	void GetStridedSpan<T>(out StridedSpan<T> span) where T: IComponent, ValueType {

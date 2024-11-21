@@ -10,11 +10,12 @@ public class RecordDomain
 {
 	public int DefaultCapacityPerChunk = 256;
 	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
+	public List<IRecordTable> iTables = new .() ~ DeleteContainerAndItems!(_);
 	private Dictionary<Query, List<RecordTable>> queryCache = new .() ~ DeleteDictionaryAndValues!(_);
+	private Dictionary<Query, List<IRecordTable>> iQueryCache = new .() ~ DeleteDictionaryAndValues!(_);
 	bool invalidateQueryCache = false;
 
-	public Dictionary<Component.Type.Key, IRecordList> lists = new .() ~ DeleteDictionaryAndValues!(_);
-
+	public Dictionary<Component.Type.Key, IRecordTable> ordinalTables = new .() ~ DeleteDictionaryAndValues!(_);
 
 	public int Count {
 		get {
@@ -283,11 +284,20 @@ public class RecordDomain
 				private static List<Component.Type.Key> includes = {incList};
 				private static List<Component.Type.Key> excludes = {excList};
 				private static Query query = .(includes, excludes) ~ _.StaticDispose();
-				private List<{nameof(RecordTable)}> getTables() {{
-					if (!domain.[Friend]queryCache.TryGetValue(query, var tables)) {{
+
+			""";
+			snippetDefGetTables(code, filter, false);
+			snippetDefGetTables(code, filter, true);
+		}
+
+		private static void snippetDefGetTables(String code, StringView filter, bool i) {
+			code += scope $"""
+
+				private List<{i?"I":""}RecordTable> get{i?"I":""}Tables() {{
+					if (!domain.[Friend]{i?"iQ":"q"}ueryCache.TryGetValue(query, var tables)) {{
 						tables = new .();
 						domain.[Friend]queryCache[query] = tables;
-						for (let table in domain.tables) if ({filter}) tables.Add(table);
+						for (let table in domain.{i?"iT":"t"}ables) if ({filter}) tables.Add(table);
 					}}
 					return tables;
 				}}
@@ -307,13 +317,14 @@ public class RecordDomain
 
 		[Comptime]
 		private static void snippetRun(String code, StringView signature, bool useSelector) {
-			let selectorArg  = !useSelector? "" : ", delegate bool(RecordTable table) selector";
+			let selectorArg  = !useSelector? "" : ", delegate bool(IRecordTable table) selector";
 			let selectorCond = !useSelector? "" : " if (selector(table))";
 			code += scope $"""
 
 				public void Run(delegate void({signature}) method{selectorArg}) {{
 					let tables = getTables();
-					for (let table in tables){selectorCond} table.For("{signature}").Run(method);
+					for (let table in tables ){selectorCond} table.For("{signature}").Run(method);
+					for (let table in iTables){selectorCond} table.For("{signature}").Run(method);
 				}}
 
 			""";
@@ -321,14 +332,15 @@ public class RecordDomain
 
 		[Comptime]
 		private static void snippetSchedule(String code, StringView signature, bool useSelector) {
-			let selectorArg  = !useSelector? "" : ", delegate bool(RecordTable table) selector";
+			let selectorArg  = !useSelector? "" : ", delegate bool(IRecordTable table) selector";
 			let selectorCond = !useSelector? "" : " if (selector(table))";
 			code += scope $"""
 
 				public JobHandle Schedule(delegate void({signature}) method{selectorArg}, int concurrency = 8) {{
 					let handle = JobHandle() {{ domain = domain }};
 					let tables = getTables();
-					for (let table in tables){selectorCond} handle.events.Add(table.For("{signature}").Schedule(method, concurrency));
+					for (let table in tables ){selectorCond} handle.events.Add(table.For("{signature}").Schedule(method, concurrency));
+					for (let table in iTables){selectorCond} handle.events.Add(table.For("{signature}").Schedule(method, concurrency));
 					return handle;
 				}}
 
