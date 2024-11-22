@@ -52,30 +52,33 @@ public struct Component: this(Component.Type.Key typeKey, Variant value), IDispo
 }
 
 [AttributeUsage(.Struct)]
-public struct ComponentAttribute: this(uint32 typeKey), Attribute, IOnTypeInit
+public struct ComponentAttribute: this(uint32 typeKey, Type baseType = null), Attribute, IOnTypeInit
 {
-	[Comptime] public void OnTypeInit(Type type, Self* prev)
-		=> Compiler.EmitTypeBody(type, scope $"""
+	[Comptime] public void OnTypeInit(Type type, Self* prev) {
+		let code = new String();
+		if (baseType != null) {
+			let constructors = baseType.GetMethods(.CreateInstance | .Public);
+			for (let ctor in constructors) {
+				if (!ctor.IsConstructor || ctor.ParamCount == 0)
+					continue;
+			
+				code += "public this(";
+				ctor.GetParamsDecl(code);
+				code += ") : base(";
+				for (let i < ctor.ParamCount) {
+					if (i > 0)
+						code += ", ";
+					code += ctor.GetParamName(i);
+				}
+				code += ") { }\n";
+			}
+		}
+
+		Compiler.EmitTypeBody(type, scope $"""
 		public static Component.Type.Key TypeKey => .({typeKey});
 		public static Component.Type AsType => .Create<{type.GetName(..scope .())}>();
 		public static implicit operator Component(Self v) => .Create(v);
+		{code}
 		""");
-}
-
-/*if (baseType != null) {
-	let constructors = baseType.GetMethods(.CreateInstance | .Public);
-	for (let ctor in constructors) {
-		if (!ctor.IsConstructor || ctor.ParamCount == 0)
-			continue;
-		
-		code += "public this(";
-		ctor.GetParamsDecl(code);
-		code += ") : base(";
-		for (let i < ctor.ParamCount) {
-			if (i > 0)
-				code += ", ";
-			code += ctor.GetParamName(i);
-		}
-		code += ") { }\n";
 	}
-}*/
+}

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Threading;
+using System.Diagnostics;
 namespace Playground.Data.Record;
 
 using Playground.Data.Record.Components; //required for codegen
@@ -56,13 +57,15 @@ public class RecordTable
 		return null;
 	}
 
+	static Random rng = new .() ~ delete _;
 	public RecordId Add(params Span<Component> components) {
-		var id = RecordId();
-		while (indexing.ContainsKey(id))
-			id = RecordId();
+		RecordId id = ?;
+		while (indexing.ContainsKey(id = RecordId(0, rng.NextI64())))
+			continue;
 		return add(..id, params components);
 	}
 
+	/// For importing record data only
 	public bool Add(RecordId id, params Span<Component> components) {
 		if (!indexing.ContainsKey(id)) {
 			add(id, params components);

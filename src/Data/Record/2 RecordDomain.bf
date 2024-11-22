@@ -9,13 +9,11 @@ using Playground.Data.Record.Components; //required for codegen
 public class RecordDomain
 {
 	public int DefaultCapacityPerChunk = 256;
-	public List<RecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
-	public List<IRecordTable> iTables = new .() ~ DeleteContainerAndItems!(_);
-	private Dictionary<Query, List<RecordTable>> queryCache = new .() ~ DeleteDictionaryAndValues!(_);
-	private Dictionary<Query, List<IRecordTable>> iQueryCache = new .() ~ DeleteDictionaryAndValues!(_);
+	public List<IRecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
+	private Dictionary<Query, List<IRecordTable>> queryCache = new .() ~ DeleteDictionaryAndValues!(_);
 	bool invalidateQueryCache = false;
 
-	public Dictionary<Component.Type.Key, IRecordTable> ordinalTables = new .() ~ DeleteDictionaryAndValues!(_);
+	public Dictionary<uint32, IRecordTable> sequences = new .() ~ DeleteDictionaryAndValues!(_);
 
 	public int Count {
 		get {
@@ -25,23 +23,23 @@ public class RecordDomain
 		}
 	}
 
-	public void ForTables(delegate void(RecordTable) method) {
+	public void ForTables(delegate void(IRecordTable) method) {
 		for (let table in tables)
 			method(table);
 	}
 
-	public void ForTables(delegate void(RecordTable) method, delegate bool(RecordTable) selector) {
+	public void ForTables(delegate void(IRecordTable) method, delegate bool(IRecordTable) selector) {
 		for (let records in tables)
 			if (selector(records))
 				method(records);
 	}
 
 	public RecordId Add(params Span<Component> components) {
-		Component.Type[] rawTypes = scope .[components.Length+1];
-		rawTypes[0] = RecordId.AsType;
-		for (let i < components.Length)
-			rawTypes[i + 1] = components[i];
-		return reserveTable<Component.Type>(params rawTypes).Add(params components);
+		return reserveTable<Component.Type>(0, params rawTypes).Add(false, params components);
+	}
+
+	public RecordId Add(uint32 indexer, params Span<Component> components) {
+		return reserveTable<Component.Type>(indexer, params rawTypes).Add(false, params components);
 	}
 
 	public bool Remove(RecordId id) {
@@ -89,7 +87,7 @@ public class RecordDomain
 		return false;
 	}
 
-	private bool transfer(RecordId id, RecordTable from, Span<Component> components) {
+	private bool transfer(RecordId id, IRecordTable from, Span<Component> components) {
 		let index = from.indexing[id];
 		Runtime.Assert(!from.[Friend]chunks[index.0].[Friend]removalQueue.Contains(index.1), "Attempted to change components of absent record");
 
@@ -101,16 +99,16 @@ public class RecordDomain
 		return true;
 	}
 	
-	private RecordTable reserveTable<T>(params Span<T> rawComponents) where T: IComponent.Type
-		=> reserveTable<T>(DefaultCapacityPerChunk, params rawComponents);
+	private IRecordTable reserveTable<T>(uint32 indexer, params Span<T> rawComponents) where T: IComponent.Type
+		=> reserveTable<T>(indexer, DefaultCapacityPerChunk, params rawComponents);
 
-	private RecordTable reserveTable<T>(int capacityPerChunk, params Span<T> rawComponents) where T: IComponent.Type {
+	private IRecordTable reserveTable<T>(uint32 indexer, int capacityPerChunk, params Span<T> rawComponents) where T: IComponent.Type {
 		for (let table in tables) if (table.HasOnly<T>(params rawComponents)) {
 			return table;
 		}
 
 		invalidateQueryCache = true;
-		return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
+		return tables.Add(..new IRecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
 	}
 
 	public void Refresh() {
@@ -128,7 +126,7 @@ public class RecordDomain
 
 	public struct JobHandle
 	{
-		public List<RecordTable.JobHandle> events = new .();
+		public List<IRecordTable.JobHandle> events = new .();
 		public RecordDomain domain;
 
 		public bool WaitFor(int waitMS = -1) {
