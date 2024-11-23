@@ -12,7 +12,7 @@ public class RecordSplitList
 	private int stride;
 	private int activeBufferSize;
 	private uint8[] raw; //second half of array is a temporary buffer for deletions
-	private List<int> removalQueue;
+	private List<(int idx, bool destroy)> removalQueue;
 	private int64 headerSum;
 	
 	public int Count { get; private set; } = 0;
@@ -48,7 +48,7 @@ public class RecordSplitList
 		}
 
 		let v0 = new uint8[this.stride*capacity*2];
-		let v2 = new List<int>(capacity);
+		let v2 = new List<(int idx, bool destroy)>(capacity);
 		let v1 = new Dictionary<Component.Type.Key, ComponentDescription>();
 
 		this.raw = v0;
@@ -60,9 +60,17 @@ public class RecordSplitList
 		var offset = 0;
 		for (let f in header) {
 			let len = capacity * f.Type.Stride;
-			this.header.Add(f.TypeKey, .(.(f.TypeKey, f.Type), offset, len));
+			this.header.Add(f.TypeKey, .(.(f.TypeKey, f.Destructor, f.Type), offset, len, f.Destructor));
 			offset += len;
 		}
+	}
+
+	public Span<T> Span<T>() where T: IComponent {
+		if (header.TryGetValue(T.TypeKey, let info)) {
+			let ptr = (T*)(void*)((int)(void*)(raw.Ptr) + info.binarySpanStart);
+			return .(ptr, count);
+		}
+		Runtime.FatalError(scope $"Components \"{typeof(T).GetName(..scope .())}\" are not present");
 	}
 
 	public bool Includes<T>() where T: IComponent
@@ -75,10 +83,8 @@ public class RecordSplitList
 		if (this.header.Count < header.Length || this.headerSum < headerSum) {
 			return false;
 		}
-		for (let id in header) {
-			if (!this.header.ContainsKey(id.TypeKey)) {
-				return false;
-			}
+		for (let id in header) if (!this.header.ContainsKey(id.TypeKey)) {
+			return false;
 		}
 		return true;
 	}
@@ -87,10 +93,8 @@ public class RecordSplitList
 		=> !header.ContainsKey(T.TypeKey);
 
 	public bool Excludes<T>(params Span<T> header) where T: IComponent.Type {
-		for (let id in header) {
-			if (this.header.ContainsKey(id.TypeKey)) {
-				return false;
-			}
+		for (let id in header) if (this.header.ContainsKey(id.TypeKey)) {
+			return false;
 		}
 		return true;
 	}
@@ -102,50 +106,39 @@ public class RecordSplitList
 		if (this.header.Count != header.Length || this.headerSum != headerSum) {
 			return false;
 		}
-		for (let c in this.header) {
+		
+		for (let c in this.header.Keys) {
 			var found = false;
-			for (let c2 in header) {
-				if (c2.TypeKey == c.key) {
-					found = true;
-					break;
-				}
+			for (let c2 in header) if (c2.TypeKey == c) {
+				found = true;
+				break;
 			}
-			if (!found)
+			if (found)
 				return false;
 		}
 		return true;
 	}
 
 	public bool AddWithoutResize(params Span<Component> components) {
-		if (count < Capacity) {
-			Set(count++, params components);
-			return true;
-		}
-		return false;
+		if (count >= Capacity)
+			return false;
+		Set(count++, params components);
+		return true;
 	}
 
-	public bool Remove(int idx) {
-		if (idx < count) {
-			removalQueue.Add(idx);
-			return true;
-		}
-		return false;
+	public bool Remove(int idx, bool destructive) {
+		if (idx >= count)
+			return false;
+		removalQueue.Add((idx, destructive));
+		return true;
 	}
 
 	public Component Get<T>(int idx, T component) where T: IComponent.Type {
 		if (header.TryGetValue(component.TypeKey, let info)) {
 			let ptr = (void*)((int)(void*)(raw.Ptr) + info.binarySpanStart + idx*component.Type.Stride);
-			return .(info.componentType.typeKey, .Create(info.componentType.type, ptr));
+			return .(info.componentType.typeKey, T.Destructor, .Create(info.componentType.type, ptr));
 		}
 		Runtime.FatalError(scope $"Components \"{component.Type.GetName(..scope .())}\" are not present");
-	}
-
-	public Span<T> Span<T>() where T: IComponent {
-		if (header.TryGetValue(T.TypeKey, let info)) {
-			let ptr = (T*)(void*)((int)(void*)(raw.Ptr) + info.binarySpanStart);
-			return .(ptr, count);
-		}
-		Runtime.FatalError(scope $"Components \"{typeof(T).GetName(..scope .())}\" are not present");
 	}
 
 	public void Set(int idx, params Span<Component> components) {
@@ -164,26 +157,32 @@ public class RecordSplitList
 	}
 
 	public void Refresh(bool removalQueueIsSorted = false) {
-		let deletedAmount = removalQueue.Count;
-		if (deletedAmount == 0) {
-			Count = count;
+		defer { Count = count; }
+
+		let queueLength = removalQueue.Count;
+		if (queueLength == 0) {
 			return;
 		}
 
 		if (!removalQueueIsSorted) {
-			removalQueue.Sort((a,b) => a <=> b);
+			removalQueue.Sort((a,b) => a.idx <=> b.idx);
 		}
 
 		raw.CopyTo(raw, 0, activeBufferSize, activeBufferSize);
 		for (let info in header.Values) {
+			let destructor = info.destructor;
 			let stride = info.componentType.type.Stride;
 			let iOffset = info.binarySpanStart;
 			let srcOffset = activeBufferSize + iOffset;
 
+			if (destructor != null) for (let i < removalQueue.Count) {
+				destructor(&raw[i*stride]);
+			}
+
 			var rawSize = 0;
 			var i = 0;
-			for (let j_ < deletedAmount) {
-				let j = removalQueue[j_] * stride;
+			for (let j_ < queueLength) {
+				let j = removalQueue[j_].idx * stride;
 
 				let copyLength = j - i;
 				raw.CopyTo(raw, srcOffset+i, iOffset+rawSize, copyLength);
@@ -196,14 +195,13 @@ public class RecordSplitList
 				rawSize += copyLength;
 			}
 
-			Internal.MemSet((.)(iOffset+rawSize + (int)(void*)raw.Ptr), 0, deletedAmount*stride);
+			Internal.MemSet((.)(iOffset+rawSize + (int)(void*)raw.Ptr), 0, queueLength*stride);
 		}
-		count -= deletedAmount;
+		count -= queueLength;
 		Runtime.Assert(count >= 0, "Attempted to remove more records than there are present");
 		removalQueue.Clear();
-		Count = count;
 	}
 
-	public struct ComponentDescription: this(Component.Type componentType, int binarySpanStart, int binarySpanLength) { }
+	public struct ComponentDescription: this(Component.Type componentType, int binarySpanStart, int binarySpanLength, Component.Destructor destructor) { }
 }
 

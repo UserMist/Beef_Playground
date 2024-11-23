@@ -18,7 +18,7 @@ public class RecordDomain
 	public int Count {
 		get {
 			var c = 0;
-			for (let table in tables) c += table.Count;
+			for (let table in tables) c += table.RecordCount;
 			return c;
 		}
 	}
@@ -35,16 +35,16 @@ public class RecordDomain
 	}
 
 	public RecordId Add(params Span<Component> components) {
-		return reserveTable<Component.Type>(0, params rawTypes).Add(false, params components);
+		return reserveTable<Component>(0, params components).DetailedAdd(components, true);
 	}
 
 	public RecordId Add(uint32 indexer, params Span<Component> components) {
-		return reserveTable<Component.Type>(indexer, params rawTypes).Add(false, params components);
+		return reserveTable<Component>(indexer, params components).DetailedAdd(components, true);
 	}
 
 	public bool Remove(RecordId id) {
 		for (let table in tables) {
-			if (table.Remove(id))
+			if (table.DetailedRemove(id, true))
 				return true;
 		}
 		return false;
@@ -63,39 +63,48 @@ public class RecordDomain
 	}
 
 	public bool Change(RecordId id, params Span<Change> changes) {
-		for (let table in tables) if (table.indexing.TryGetValue(id, let indexing)) {
-			let chunk = table.[Friend]chunks[indexing.0];
-			var components = new List<Component>(chunk.header.Count + changes.Length); defer delete components;
-			
-			for (let change in changes) if (change.component.HasValue) {
-				components.Add(change.component.ValueOrDefault);
-			}
+		for (let table in tables) {
+			let indexing = table.LocateRecord(id);
 
-			for (let desc in chunk.header.Values) {
-				var remove = false;
-				for (let j < changes.Length) if (desc.componentType.typeKey == changes[j].typeKey) {
-					remove = true;
-					break;
+			if (indexing != default) {
+				let components = new List<Component>(changes.Length * 2); defer delete components;
+				let header = table.GetComponentTypes(..scope .());
+
+				for (let change in changes) if (change.component.HasValue) {
+					components.Add(change.component.ValueOrDefault);
 				}
-				
-				if (!remove)
-					components.Add(chunk.Get(indexing.1, desc.componentType));
+	
+				for (let type in header) {
+					var remove = false;
+					for (let j < changes.Length) if (type.TypeKey == changes[j].typeKey) {
+						remove = true;
+						break;
+					}
+					
+					if (!remove) {
+						table.GetComponentChunk(indexing.0, type.TypeKey, let ptr, let stride);
+						let ptr2 = (uint8*) ptr;
+						components.Add(.(type.typeKey, type.destructor, .Create(type.type, &ptr2[stride*indexing.1])));
+					}
+				}
+	
+				return transfer(id, table, components);
 			}
-
-			return transfer(id, table, components);
 		}
 		return false;
 	}
 
 	private bool transfer(RecordId id, IRecordTable from, Span<Component> components) {
-		let index = from.indexing[id];
-		Runtime.Assert(!from.[Friend]chunks[index.0].[Friend]removalQueue.Contains(index.1), "Attempted to change components of absent record");
+		//let indexing = from.LocateRecord(id);
+		//Runtime.Assert(!from.[Friend]chunks[indexing.0].[Friend]removalQueue.Contains(indexing.1), "Attempted to change components of absent record");
 
-		let table2 = reserveTable<Component>(params components);
-		if (!table2.Add(id, params components)) {
+		Runtime.Assert(id.indexer == 0);
+
+		let table2 = reserveTable<Component>(id.indexer, params components);
+		if (!table2.DetailedAdd(id, components, true)) {
 			return false;
 		}
-		from.Remove(id, disableDestructors: true); //todo
+		from.DetailedRemove(id, false);
 		return true;
 	}
 	
@@ -103,17 +112,25 @@ public class RecordDomain
 		=> reserveTable<T>(indexer, DefaultCapacityPerChunk, params rawComponents);
 
 	private IRecordTable reserveTable<T>(uint32 indexer, int capacityPerChunk, params Span<T> rawComponents) where T: IComponent.Type {
-		for (let table in tables) if (table.HasOnly<T>(params rawComponents)) {
-			return table;
+		if (indexer == 0) {
+			let rawTypekeys = scope Component.Type.Key[rawComponents.Length];
+			for (let i < rawComponents.Length) {
+				rawTypekeys[i] = rawComponents[i].TypeKey;
+			}
+			for (let table in tables) if (table.HasOnly(params rawTypekeys)) {
+				return table;
+			}
+			invalidateQueryCache = true;
+			return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
 		}
 
-		invalidateQueryCache = true;
-		return tables.Add(..new IRecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
+		Runtime.Assert(sequences.TryGetValue(indexer, let table));
+		return table;
 	}
 
 	public void Refresh() {
 		for (let table in tables)
-			table.Refresh();
+			table.RefreshChunks();
 
 		if (invalidateQueryCache) {
 			for (let cachedList in queryCache.Values)
@@ -126,7 +143,7 @@ public class RecordDomain
 
 	public struct JobHandle
 	{
-		public List<IRecordTable.JobHandle> events = new .();
+		public List<RecordTable.JobHandle> events = new .();
 		public RecordDomain domain;
 
 		public bool WaitFor(int waitMS = -1) {
@@ -141,15 +158,15 @@ public class RecordDomain
 	
 	private struct Query: IHashable
 	{
-		public List<Component.Type.Key> includes;
-		public List<Component.Type.Key> excludes = null;
+		public Component.Type.Key[] includes;
+		public Component.Type.Key[] excludes = null;
 		public int64 hash;
 		public int64 keysum = 0;
 
-		public this(List<Component.Type.Key> inc, List<Component.Type.Key> exc) {
-			includes = inc..Sort(scope (a,b) => a.value<=>b.value);
+		public this(Component.Type.Key[] inc, Component.Type.Key[] exc) {
+			includes = Array.Sort(..inc, scope (a,b) => a.value<=>b.value);
 			if (exc != null)
-				excludes = exc..Sort(scope (a,b) => a.value<=>b.value);
+				excludes = Array.Sort(..exc, scope (a,b) => a.value<=>b.value);
 			for (let i in includes)
 				keysum += i.value;
 			hash = keysum;
@@ -194,8 +211,8 @@ public class RecordDomain
 			var excludeOtherTypeNames = false;
 			var includedTypeNames = scope List<StringView>(), excludedTypeNames = scope List<StringView>();
 
-			var filterIdx = s.IndexOfAny(scope char8[2]('+', '-'));
-			var signature = s.Substring(0, filterIdx < 0? s.Length : filterIdx);
+			let filterStart = s.IndexOf('(');
+			var signature = s.Substring(0, filterStart < 0? s.Length : filterStart);
 			var ordinalName = scope String();
 			if (!s.IsEmpty) for (var typeName in signature.Split(',')) {
 				typeName..Trim();
@@ -210,9 +227,10 @@ public class RecordDomain
 			}
 
 			var ordinalInFilter = false;
-			while (filterIdx >= 0 && filterIdx < s.Length) {
+			var filterIdx = filterStart+1;
+			while (filterStart >= 0 && filterIdx >= 0 && filterIdx < s.Length) {
 				var filterEnd = s.IndexOfAny(scope char8[2]('+', '-'), filterIdx + 1);
-				if (filterEnd < 0) filterEnd = s.Length;
+				if (filterEnd < 0) filterEnd = s.LastIndexOf(')');
 
 				let item = s[filterIdx..<filterEnd]..Trim();
 				if (item.StartsWith('+')) {
@@ -267,11 +285,11 @@ public class RecordDomain
 
 		[Comptime]
 		private static void snippetQuerying(String code, List<StringView> includedTypeNames, List<StringView> excludedTypeNames) {
-			let incList = snippetNewQueryList(..scope String(), includedTypeNames);
-			let excList = excludedTypeNames == null? scope $"null" : snippetNewQueryList(..scope String(), excludedTypeNames);
+			let incArray = snippetNewQueryArray(..scope String(), includedTypeNames);
+			let excArray = excludedTypeNames == null? scope $"null" : snippetNewQueryArray(..scope String(), excludedTypeNames);
 			let filter = scope String();
 			if (excludedTypeNames == null) {
-				filter.Set("table.HasOnly(params includes)");
+				filter.Set("table.HasOnly<Component.Type.Key>(params includes)");
 			} else if (excludedTypeNames.Count == 0) {
 				filter.Set("table.Includes(params includes)");
 			} else {
@@ -279,23 +297,22 @@ public class RecordDomain
 			}
 			code += scope $"""
 
-				private static List<Component.Type.Key> includes = {incList};
-				private static List<Component.Type.Key> excludes = {excList};
+				private static Component.Type.Key[] includes = {incArray};
+				private static Component.Type.Key[] excludes = {excArray};
 				private static Query query = .(includes, excludes) ~ _.StaticDispose();
 
 			""";
-			snippetDefGetTables(code, filter, false);
-			snippetDefGetTables(code, filter, true);
+			snippetDefGetTables(code, filter);
 		}
 
-		private static void snippetDefGetTables(String code, StringView filter, bool i) {
+		private static void snippetDefGetTables(String code, StringView filter) {
 			code += scope $"""
 
-				private List<{i?"I":""}RecordTable> get{i?"I":""}Tables() {{
-					if (!domain.[Friend]{i?"iQ":"q"}ueryCache.TryGetValue(query, var tables)) {{
-						tables = new .();
+				private List<IRecordTable> getTables() {{
+					if (!domain.[Friend]queryCache.TryGetValue(query, var tables)) {{
+						tables = new List<IRecordTable>();
 						domain.[Friend]queryCache[query] = tables;
-						for (let table in domain.{i?"iT":"t"}ables) if ({filter}) tables.Add(table);
+						for (let table in domain.tables) if ({filter}) tables.Add(table);
 					}}
 					return tables;
 				}}
@@ -304,13 +321,13 @@ public class RecordDomain
 		}
 		
 		[Comptime]
-		private static void snippetNewQueryList(String str, List<StringView> list) {
-			str += "new List<Component.Type.Key>(){";
+		private static void snippetNewQueryArray(String str, List<StringView> list) {
+			str += scope $"new Component.Type.Key[{list.Count}](";
 			for (let i in list) {
 				if (@i.Index > 0) str += ", ";
 				str += scope $"{i}.TypeKey";
 			}
-			str += "}";
+			str += ")";
 		}
 
 		[Comptime]
@@ -321,8 +338,7 @@ public class RecordDomain
 
 				public void Run(delegate void({signature}) method{selectorArg}) {{
 					let tables = getTables();
-					for (let table in tables ){selectorCond} table.For("{signature}").Run(method);
-					for (let table in iTables){selectorCond} table.For("{signature}").Run(method);
+					for (let table in tables){selectorCond} RecordTable.For(table, "{signature}").Run(method);
 				}}
 
 			""";
@@ -337,8 +353,7 @@ public class RecordDomain
 				public JobHandle Schedule(delegate void({signature}) method{selectorArg}, int concurrency = 8) {{
 					let handle = JobHandle() {{ domain = domain }};
 					let tables = getTables();
-					for (let table in tables ){selectorCond} handle.events.Add(table.For("{signature}").Schedule(method, concurrency));
-					for (let table in iTables){selectorCond} handle.events.Add(table.For("{signature}").Schedule(method, concurrency));
+					for (let table in tables){selectorCond} handle.events.Add(RecordTable.For(table, "{signature}").Schedule(method, concurrency));
 					return handle;
 				}}
 

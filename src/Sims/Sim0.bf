@@ -11,13 +11,13 @@ using static System.Math;
 
 namespace Playground.Data.Record.Components
 {
-	[Component(9640)] public struct PlayerTag: this(int id), IComponent;
-	[Component(515145)] public struct GravEmitter: this(float v), IComponent;
-	[Component(555145)] public struct GravAbsorber: this(float v), IComponent;
-	[Component(598777)] public struct SelfDestruct: this(float t), IComponent;
-	[Component(55777)] public struct Shield: this(float r), IComponent;
-	[Component(4951)] public struct Bullet: this(), IComponent;
-	[Component(6674985)] public struct Bond: this(RecordId a, RecordId b, float r), IComponent;
+	[Component(9640)] public struct PlayerTag: this(int id), IComponent {}
+	[Component(515145)] public struct GravEmitter: this(float v), IComponent {}
+	[Component(555145)] public struct GravAbsorber: this(float v), IComponent {}
+	[Component(598777)] public struct SelfDestruct: this(float t), IComponent {}
+	[Component(55777)] public struct Shield: this(float r), IComponent {}
+	[Component(4951)] public struct Bullet: this(), IComponent {}
+	[Component(6674985)] public struct Bond: this(RecordId a, RecordId b, float r), IComponent {}
 }
 
 namespace Playground;
@@ -78,7 +78,7 @@ class Sim0: ISim
 
 		let ratio = float(image.height)/image.width;
 
-		domain.For("Pos3f, Vel3f, ref OldPos3f -PlayerTag").Run(scope (pos,vel,oldPos) => {
+		domain.For("Pos3f, Vel3f, ref OldPos3f (-PlayerTag)").Run(scope (pos,vel,oldPos) => {
 			image.DrawLine(pos*.(ratio,1), oldPos*.(ratio,1), .All(0.5f));
 			oldPos = pos;
 		});
@@ -120,9 +120,9 @@ class Sim0: ISim
 
 		domain.Refresh();
 
-		domain.For("Pos3f,ref Vel3f,OldPos3f +GravAbsorber").Run(scope (pos,vel,oldPos) => {
+		domain.For("Pos3f,ref Vel3f,OldPos3f (+GravAbsorber)").Run(scope (pos,vel,oldPos) => {
 			vel *= Math.Exp(-0.1f*dt);
-			domain.For("Pos3f,Vel3f,OldPos3f +GravEmitter").Run(scope [&](pos2,vel2,oldPos2) => {
+			domain.For("Pos3f,Vel3f,OldPos3f (+GravEmitter)").Run(scope [&](pos2,vel2,oldPos2) => {
 				if (pos == pos2) return;
 				let dp = (pos - pos2);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
@@ -156,7 +156,7 @@ class Sim0: ISim
 			});
 		});
 
-		domain.For("ref Vel3f, SelfDestruct, RecordId +Bullet").Run(scope (v,s,id) => {
+		domain.For("ref Vel3f, SelfDestruct, RecordId (+Bullet)").Run(scope (v,s,id) => {
 			v += float2(Math.Cos(s.t*600 + id.idx.GetHashCode()), Math.Sin(s.t*600 + id.idx.GetHashCode())) * dt * 40;
 		});
 
@@ -187,16 +187,16 @@ class Sim0: ISim
 		var did = 0;
 		switch(event.keysym.scancode) {
 		case .Pageup:
-			domain.For("RecordId -PlayerTag").Run(scope [&](id) => {
+			domain.For("RecordId (-PlayerTag)").Run(scope [&](id) => {
 				if (did++ > 0) return;
-				Console.WriteLine(id.idx.[Friend]mA.ToString(..scope .()));
+				Console.WriteLine(id.idx.ToString(..scope .()));
 				domain.Change(id, .Set(PlayerTag(15)), .Set(Shield(0.1f)));
 			});
 
 		case .PageDown:
-			domain.For("RecordId +PlayerTag").Run(scope [&](id) => {
+			domain.For("RecordId (+PlayerTag)").Run(scope [&](id) => {
 				if (did++ > 0) return;
-				Console.WriteLine(id.idx.[Friend]mA.ToString(..scope .()));
+				Console.WriteLine(id.idx.ToString(..scope .()));
 				domain.Change(id, .Remove<PlayerTag>());
 			});
 
@@ -214,7 +214,7 @@ class Sim0: ISim
 			var i = 0;
 			domain.For("RecordId").Run(scope (id) => {
 				Console.Write("   ");
-				Console.WriteLine(id.idx.[Friend]mA);
+				Console.WriteLine(id.idx);
 			}, scope [&](table) => { Console.WriteLine(scope $"\ntable{i++}:"); return true; });
 			Console.WriteLine();
 

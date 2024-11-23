@@ -1,30 +1,34 @@
 using System;
 namespace Playground.Data.Record;
 
-public struct Component: this(Component.Type.Key typeKey, Variant value), IDisposable, IComponent.Type
+public struct Component: this(Component.Type.Key typeKey, Component.Destructor destructor, Variant value), IDisposable, IComponent.Type
 {
 	public Component.Type.Key TypeKey => this.typeKey;
 	public System.Type Type => this.value.VariantType;
+	public Component.Destructor Destructor => destructor;
+
+	public typealias Destructor = delegate void(void*);
 
 	public void Dispose() mut
 		=> value.Dispose();
 	
 	public static Self Create<T>(T value) where T: IComponent, struct
-		=> Self(T.TypeKey, Variant.Create(value));
+		=> Self(T.TypeKey, T.Destructor, Variant.Create(value));
 
 	public static implicit operator Component.Type(Component v)
-		=> .(v.typeKey, v.value.VariantType);
+		=> .(v.typeKey, v.Destructor, v.value.VariantType);
 
-	public struct Type: this(Component.Type.Key typeKey, System.Type type), IComponent.Type
+	public struct Type: this(Component.Type.Key typeKey, Component.Destructor destructor, System.Type type), IComponent.Type
 	{
 		public Component.Type.Key TypeKey => this.typeKey;
 		public System.Type Type => this.type;
+		public Component.Destructor Destructor => destructor;
 
 		public static Component.Type Create<T>() where T: IComponent, struct
-			=> .(T.TypeKey, typeof(T));
+			=> .(T.TypeKey, T.Destructor, typeof(T));
 
 		public static Component.Type Create(IComponent.Type componentType)
-			=> .(componentType.TypeKey, componentType.Type);
+			=> .(componentType.TypeKey, componentType.Destructor, componentType.Type);
 
 		public static void InitSpan<T>(Span<Component.Type> ret, Span<T> components) where T: IComponent.Type {
 			for (let i < ret.Length)
@@ -47,6 +51,7 @@ public struct Component: this(Component.Type.Key typeKey, Variant value), IDispo
 
 			public Component.Type.Key TypeKey => this;
 			public System.Type Type => ThrowUnimplemented();
+			public Component.Destructor Destructor => ThrowUnimplemented();
 		}
 	}
 }
