@@ -1,7 +1,8 @@
 using System;
 namespace Playground;
 
-struct Vec2<T>: this(T x, T y) where T: operator T+T, operator T-T, operator T*T, operator T/T
+struct Vec2<T>: this(T x, T y)
+where T: operator T+T, operator T-T, operator T*T, operator T/T
 {
 	[Commutable] public static Self operator +(Self a, Self b) => .(a.x+b.x, a.y+b.y);
 	public static Self operator -(Self a, Self b) => .(a.x-b.x, a.y-b.y);
@@ -14,11 +15,21 @@ struct Vec2<T>: this(T x, T y) where T: operator T+T, operator T-T, operator T*T
 	public static explicit operator Vec2<M><M>(Vec2<T> a)
 		where M: operator M+M, operator M-M, operator M*M, operator M/M, operator explicit T
 		=> .((.)a.x, (.)a.y);
-	
+
 	public static Self All(T v) => .(v, v);
+
+	public static implicit operator Vec2<T>(T[2] value) => BitConverter.Convert<T[2], Vec2<T>>(value);
 }
 
-struct Vec3<T>: this(T x, T y, T z = default) where T: operator T+T, operator T-T, operator T*T, operator T/T
+extension Vec2<T>: IHashable where T: int
+{
+	public int GetHashCode() {
+		return (int(x) << 32) + y;
+	}
+}
+
+struct Vec3<T>: this(T x, T y, T z = default)
+where T: operator T+T, operator T-T, operator T*T, operator T/T
 {
 	[Commutable] public static Self operator +(Self a, Self b) => .(a.x+b.x, a.y+b.y, a.z+b.z);
 	public static Self operator -(Self a, Self b) => .(a.x-b.x, a.y-b.y, a.z-b.z);
@@ -36,6 +47,13 @@ struct Vec3<T>: this(T x, T y, T z = default) where T: operator T+T, operator T-
 		=> .((.)a.x, (.)a.y, (.)a.z);
 
 	public static Self All(T v) => .(v, v, v);
+
+	public static implicit operator Vec3<T>(T[3] value) => BitConverter.Convert<T[3], Vec3<T>>(value);
+}
+
+extension Vec3<T> where T: operator -T
+{
+	public static Self operator -(Self a) => .(-a.x, -a.y, -a.z);
 }
 
 typealias double2 = Vec2<double>;

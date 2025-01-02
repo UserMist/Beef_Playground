@@ -11,10 +11,10 @@ struct UserID: IHashable
 		=> guid.GetHashCode();
 }
 
-class RecordDomainUploader
+class EntityDomainUploader
 {
 	public NetTick currentTick;
-	public RecordDomain domain;
+	public EntityDomain domain;
 
 	//repeatedly sent out to users
 	public Dictionary<UserID, HashSet<Explanation>> unacknowledgedMessages;
@@ -22,10 +22,10 @@ class RecordDomainUploader
 	public struct Explanation: IHashable
 	{
 		public Header header;
-		public RecordId RecordId;
-		public RecordInfo recordInfo;
+		public EntityId EntityId;
+		public EntityInfo entityInfo;
 
-		public enum RecordInfo {
+		public enum EntityInfo {
 			case DoesntExist;
 			case Update(uint8 packetIdx, uint8 packetAmount, bool allFields, (Component.Type.Key compId, String value)[] assignments);
 			case SyncChecker(int64 hash); //to account for imperfect hashing 1% of SymcCheckers should be randomly replaced with other cases
@@ -67,10 +67,10 @@ class RecordDomainUploader
 		let msgHeaderPtr = (Explanation.Header*)bytes.Ptr;
 		bytes.Append((char8*)&msgHeader, sizeof(Explanation.Header));
 
-		var RecordId = msg.RecordId;
-		bytes.Append((char8*)&RecordId, sizeof(RecordId));
+		var EntityId = msg.EntityId;
+		bytes.Append((char8*)&EntityId, sizeof(EntityId));
 
-		switch (msg.recordInfo) {
+		switch (msg.entityInfo) {
 		  case .DoesntExist:
 			writeByte(bytes, 0);
 		  case .Update(let idx, let outOf, let assignments):
@@ -120,14 +120,14 @@ class RecordDomainUploader
 	}
 }
 
-class RecordDomainDownloader
+class EntityDomainDownloader
 {
 	//things to consider at every step of implementation:
 	// explanation arrives too late and out of order (only a problem when simulation when our snapshots do not capture that tick.
 	//         If so, we preferably query it again, since applying it to oldest tick loses information about which update was first)
 	// explanation did not arrive (see messagesToAcknowledge)
 	// explanation did arrive duplicated (see knownMessages)
-	public List<(NetTick tick, RecordDomain domain)> snapshots;
+	public List<(NetTick tick, EntityDomain domain)> snapshots;
 
 	enum AppliedExplanation {
 		case None;
@@ -136,24 +136,24 @@ class RecordDomainDownloader
 		case Update(bool allFields, uint8 done, uint8 outOf);
 	}
 
-	public List<(RecordId, int)> syncQueries; 
-	public Dictionary<RecordId, (NetTick tick, uint8 updates)> lastUpdatedRecords; //used to build recordsToQuery, and to determine if 
-	public List<RecordDomainUploader.Explanation.Header> knownMessages;
-	public List<RecordDomainUploader.Explanation.Header> messagesToAcknowledge;
+	public List<(EntityId, int)> syncQueries; 
+	public Dictionary<EntityId, (NetTick tick, uint8 updates)> lastUpdatedEntities; //used to build entitiesToQuery, and to determine if 
+	public List<EntityDomainUploader.Explanation.Header> knownMessages;
+	public List<EntityDomainUploader.Explanation.Header> messagesToAcknowledge;
 
-	public Result<RecordDomainUploader.Explanation> ReadExplanation(StringView src) {
+	public Result<EntityDomainUploader.Explanation> ReadExplanation(StringView src) {
 		var pos = 0;
-		let header = read<RecordDomainUploader.Explanation.Header>(src, &pos);
-		if (knownMessages.Contains(header) || header.checkSum != RecordDomainUploader.CheckSum(src)) {
+		let header = read<EntityDomainUploader.Explanation.Header>(src, &pos);
+		if (knownMessages.Contains(header) || header.checkSum != EntityDomainUploader.CheckSum(src)) {
 			return .Err;
 		}
 		
-		RecordDomainUploader.Explanation ret = ?;
+		EntityDomainUploader.Explanation ret = ?;
 		knownMessages.Add(ret.header = header);
-		ret.RecordId = read<RecordId>(src, &pos);
+		ret.EntityId = read<EntityId>(src, &pos);
 		switch (read<uint8>(src, &pos)) {
 		  case 0:
-			ret.recordInfo = .DoesntExist;
+			ret.entityInfo = .DoesntExist;
 		  case 1:
 			let count = read<uint8>(src, &pos);
 			let idx = read<uint8>(src, &pos);
@@ -163,14 +163,14 @@ class RecordDomainDownloader
 				names[i].name = readString255(src, &pos);
 				names[i].value = readString255(src, &pos);
 			}
-			ret.recordInfo = .Update(idx, outOf, names);
+			ret.entityInfo = .Update(idx, outOf, names);
 		  case 2:
 			let count = read<uint8>(src, &pos);
 			let names = new String[count];
 			for (let i < count) {
 				names[i] = readString255(src, &pos);
 			}
-			ret.recordInfo = .CompositionCheck(names);
+			ret.entityInfo = .CompositionCheck(names);
 		  default: ThrowUnimplemented();
 		}
 		return ret;
@@ -190,7 +190,7 @@ class RecordDomainDownloader
 		return ret;
 	}
 
-	public void ApplyMessage(RecordDomainUploader.Explanation message) {
+	public void ApplyMessage(EntityDomainUploader.Explanation message) {
 		//clamp it to current snapshot, or to oldest snapshot (make sure reordering doesn't happen)
 		var message;
 		let firstTick = snapshots[0].tick;

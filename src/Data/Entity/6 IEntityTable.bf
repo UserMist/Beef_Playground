@@ -1,16 +1,16 @@
 using System;
 using System.Collections;
 using System.Threading;
-using Playground.Data.Record.Components;
-namespace Playground.Data.Record;
+using Playground.Data.Entity.Components;
+namespace Playground.Data.Entity;
 
-interface IRecordTable
+interface IEntityTable
 {
-	int RecordCountForChunk(int idx);
+	int EntityCountForChunk(int idx);
 	int ChunkCount { get; }
 	void GetComponentChunk(int idx, Component.Type.Key typekey, out void* ptr, out int stride);
 	void GetComponentTypes(List<Component.Type> types);
-	public (int, int) LocateRecord(RecordId id);
+	(int, int)? LocateEntity(EntityId id);
 
 	void GetComponentTypekeys(List<Component.Type.Key> typekeys) {
 		let types = GetComponentTypes(..scope .(typekeys.Count));
@@ -18,12 +18,12 @@ interface IRecordTable
 			typekeys.Add(type.TypeKey);
 	}
 
-	int RecordCount {
+	int EntityCount {
 		get {
 			let cc = ChunkCount;
 			var count = 0;
 			for (let idx < cc)
-				count += RecordCountForChunk(idx);
+				count += EntityCountForChunk(idx);
 			return count;
 		}
 	}
@@ -34,21 +34,23 @@ interface IRecordTable
 		=> a.Length == ComponentCount? Includes(params a) : false;
 
 	bool Includes(params Span<Component.Type.Key> a) {
-		if (a.Length < ComponentCount) {
+		if (a.Length > ComponentCount) {
 			return false;
 		}
 
-		let my = (Span<Component.Type.Key>) GetComponentTypekeys(..scope .());
+		let my = GetComponentTypekeys(..new .()); defer delete my; //todo debug (remove scope)
 		if (Component.Type.HeaderSum(params a) > Component.Type.HeaderSum(params my)) {
 			return false;
 		}
 
-		for (let bk in my) {
+		for (let ak in a) {
 			var contains = false;
-			for (let ak in a) if (ak.TypeKey == bk) {
+			
+			for (let i < my.Count) if (ak.TypeKey == my[i]) {
 				contains = true;
 				break;
 			}
+
 			if (!contains)
 				return false;
 		}
@@ -65,36 +67,36 @@ interface IRecordTable
 
 	public void RefreshChunks() { }
 	
-	RecordId DetailedAdd(Span<Component> values, bool dispose)
+	EntityId DetailedAdd(Span<Component> values, bool dispose)
 		=> ThrowUnimplemented();
 
-	bool DetailedAdd(RecordId id, Span<Component> values, bool dispose)
+	bool DetailedAdd(EntityId id, Span<Component> values, bool dispose)
 		=> ThrowUnimplemented();
 
-	bool DetailedRemove(RecordId id, bool destructive)
+	bool DetailedRemove(EntityId id, bool destructive)
 		=> ThrowUnimplemented();
 
 	public bool UsesPlainSpans => false;
 
 }
 
-extension RecordTable
+extension EntityTable
 {
-	public static Span<T> Span<T>(IRecordTable table, int idx) where T: IComponent {
+	public static Span<T> Span<T>(IEntityTable table, int idx) where T: IComponent {
 		table.GetComponentChunk(idx, T.TypeKey, let ptr, ?);
-		return .((.)ptr, table.RecordCountForChunk(idx));
+		return .((.)ptr, table.EntityCountForChunk(idx));
 	}
 
-	public static StridedSpan<T> StridedSpan<T>(IRecordTable table, int idx) where T: IComponent {
+	public static StridedSpan<T> StridedSpan<T>(IEntityTable table, int idx) where T: IComponent {
 		table.GetComponentChunk(idx, T.TypeKey, let ptr, let stride);
-		return .((.)ptr, table.RecordCountForChunk(idx)) {
+		return .((.)ptr, table.EntityCountForChunk(idx)) {
 			Stride = stride
 		};
 	}
 
 	public struct JobHandle
 	{
-		public RecordTable table;
+		public EntityTable table;
 		public List<WaitEvent> events = new .();
 
 		public bool WaitFor(int waitMS = -1) {
@@ -108,14 +110,14 @@ extension RecordTable
 		}
 	}
 
-	public static QueryBuilder<S> For<S>(IRecordTable table, S s) where S:const String
+	public static QueryBuilder<S> For<S>(IEntityTable table, S s) where S:const String
 		=> .(table);
 
-	public struct QueryBuilder<S>: this(IRecordTable table) where S: const String
+	public struct QueryBuilder<S>: this(IEntityTable table) where S: const String
 	{
 		[OnCompile(.TypeInit), Comptime]
 		static void emit() {
-			let signature = S == null? "RecordId" : S;
+			let signature = S == null? "EntityId" : S;
 			var typekeys = scope String();
 			var args = scope String();
 			var stridedSpanInits = scope String();
@@ -134,8 +136,8 @@ extension RecordTable
 				
 				typekeys += scope $"{typeNameNaked}.TypeKey";
 				args += scope $"{byRef? "ref " : ""}span{idx}[i]";
-				stridedSpanInits += scope $"\n\t\t\t\tlet span{idx} = RecordTable.StridedSpan<{typeNameNaked}>(table, chunkIdx);";
-				plainSpanInits   += scope $"\n\t\t\t\tlet span{idx} = RecordTable.Span<{typeNameNaked}>(table, chunkIdx);";
+				stridedSpanInits += scope $"\n\t\t\t\tlet span{idx} = EntityTable.StridedSpan<{typeNameNaked}>(table, chunkIdx);";
+				plainSpanInits   += scope $"\n\t\t\t\tlet span{idx} = EntityTable.Span<{typeNameNaked}>(table, chunkIdx);";
 			}
 			
 			let code = scope $"""
@@ -154,7 +156,7 @@ extension RecordTable
 				public JobHandle Schedule(delegate void({signature}) method, int concurrency = 8) {{
 					let handle = JobHandle();
 					let chunkCount = table.ChunkCount;
-					let totalC = table.RecordCount;
+					let totalC = table.EntityCount;
 					let delta = totalC/concurrency;
 					let remainder = totalC - delta*concurrency;
 
@@ -176,7 +178,7 @@ extension RecordTable
 			return new $"""
 
 					for (let chunkIdx < chunkCount) {{
-						let c = table.RecordCountForChunk(chunkIdx);{spanInits}
+						let c = table.EntityCountForChunk(chunkIdx);{spanInits}
 						for (let i < c)
 							method({args});
 					}}
@@ -192,15 +194,15 @@ extension RecordTable
 						var lStart = start;
 						var lEnd = end;
 						for (let chunkIdx < chunkCount) {{
-							let recordCount = table.RecordCountForChunk(chunkIdx);
+							let entityCount = table.EntityCountForChunk(chunkIdx);
 							defer {{
-								lStart -= recordCount;
-								lEnd -= recordCount;
+								lStart -= entityCount;
+								lEnd -= entityCount;
 							}}
 							if (lEnd <= 0) break;
-							if (lStart >= recordCount) continue;
+							if (lStart >= entityCount) continue;
 							let c0 = Math.Max(lStart, 0);
-							let c1 = Math.Min(lEnd, recordCount);{spanInits}
+							let c1 = Math.Min(lEnd, entityCount);{spanInits}
 							for (var i = c0; i < c1; i++)
 								method({args});
 						}}

@@ -5,11 +5,11 @@ using System.Threading;
 using System.Collections;
 using System.Diagnostics;
 using Playground.Data;
-using Playground.Data.Record;
-using Playground.Data.Record.Components;
+using Playground.Data.Entity;
+using Playground.Data.Entity.Components;
 using static System.Math;
 
-namespace Playground.Data.Record.Components
+namespace Playground.Data.Entity.Components
 {
 	[Component(9640)] public struct PlayerTag: this(int id), IComponent {}
 	[Component(515145)] public struct GravEmitter: this(float v), IComponent {}
@@ -17,15 +17,15 @@ namespace Playground.Data.Record.Components
 	[Component(598777)] public struct SelfDestruct: this(float t), IComponent {}
 	[Component(55777)] public struct Shield: this(float r), IComponent {}
 	[Component(4951)] public struct Bullet: this(), IComponent {}
-	[Component(6674985)] public struct Bond: this(RecordId a, RecordId b, float r), IComponent {}
+	[Component(6674985)] public struct Bond: this(EntityId a, EntityId b, float r), IComponent {}
+	[Component(951515445)] public struct Color: this(float3 v), IComponent {}
 }
 
 namespace Playground;
+	/*
 
-class Sim0: ISim
+class Sim0: Subprogram
 {
-	RecordDomain domain = new .() ~ delete _;
-
 	Random rng = new .(7) ~ delete _;
 	float rand() => .(rng.NextDouble(-1,1));
 	float rand(Random rng, float min = -1, float max = 1) => .(rng.NextDouble(min,max));
@@ -34,13 +34,15 @@ class Sim0: ISim
 	public NetWriter netWriter = new .(dumper) ~ delete _;
 	public NetReader netReader = new .(dumper) ~ delete _;
 
+	float2 mouseWorldPos;
+
 	public this() {
 		let n = 13;
 
 		var avgP = float3(0,0);
 		var avgV = float3(0,0);
 		for (let i < n) {
-			add(let vel);
+			add(let vel, true);
 			avgV += vel;
 		}
 		domain.Refresh();
@@ -60,108 +62,136 @@ class Sim0: ISim
 		Socket.Uninit();
 	}
 
-	private RecordId add(out float3 vel) {
+	private EntityId add(out float3 vel, bool emits) {
 		let pos = float3(rand(), rand(), rand() * 0.01f)*0.5f;
 		vel = float3(rand(), rand(), rand() * 0.01f)*0.4f;
-		return domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos, GravEmitter(1f), GravAbsorber(1f));
+		if (emits) {
+			return domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos, GravEmitter(100f));
+		}
+		return domain.Add((Pos3f)pos, (Vel3f)vel, (OldPos3f)pos, GravAbsorber(1f));
 	}
 
 	float t;
-	void ISim.DrawFrame(float dt, Grid2<float3> image) {
+	Vec2<float> mousepos;
+	public override void UpdateIO(float dt, IOConnection io) {
 		t+=dt;
+		mouseWorldPos = Main.Instance.MousePos;
 
-		let cells = image.cells.Ptr;
-		let c = image.cells.Count;
-		for (let i < c) {
-			cells[i] = Lerp(cells[i], .(0.05f,0.02f,0.03f), 0.54f);
-		}
+		io.Render(domain, scope (target) => {
+			if (Main.Instance.MouseL)
+				target.DrawLine(Main.Instance.MousePos, Main.Instance.MousePos, float3.All(0.5f));
 
-		let ratio = float(image.height)/image.width;
+			domain.For("(+Camera)").Run(scope () => {
+				
+			});
 
-		domain.For("Pos3f, Vel3f, ref OldPos3f (-PlayerTag)").Run(scope (pos,vel,oldPos) => {
-			image.DrawLine(pos*.(ratio,1), oldPos*.(ratio,1), .All(0.5f));
-			oldPos = pos;
-		});
-
-		domain.For("Pos3f, Vel3f, ref OldPos3f, PlayerTag").Run(scope (pos,vel,oldPos,ply) => {
-			let rng = scope Random(ply.id);
-			image.DrawLine(pos*.(ratio,1), oldPos*.(ratio,1), .(rand(rng,0,1), rand(rng,0,1), rand(rng,0,1)));
-			oldPos = pos;
-
-			/*let r = 0.04f;
-			for (let j < image.height) {
-				for (let i < image.width) {
-					let dp = image.ScrerecoClip(.(i, j)) - p[i0];
-					let len2 = (dp.x*dp.x + dp.y*dp.y);
-
-					if (len2 < r*r) {
-						image[i, j] = .All(1 - Sqrt(len2)/r);
-					}
-				}
-			}*/
-		});
-
-		
-		domain.For("Shield, Pos3f").Run(scope (shield, pos) => {
-			var i = 0;
-			while (i < 16) {
-				let m = 2f/16 * Math.PI_f;
-				let p = pos + shield.r * float2(Math.Cos(i*m), Math.Sin(i*m));
-				i++;
-				let op = pos + shield.r * float2(Math.Cos(i*m), Math.Sin(i*m));
-				image.DrawLine(p*float2(ratio,1), op*float2(ratio,1), float3(0.2f,0.1f,0.5f));
+			let cells = target.image.cells.Ptr;
+			let c = target.image.cells.Count;
+			for (let i < c) {
+				cells[i] = Lerp(cells[i].Value, .(0.05f,0.02f,0.03f), 0.54f);
 			}
+
+			domain.For("Pos3f, Vel3f, ref OldPos3f (-Color -PlayerTag)").Run(scope (pos,vel,oldPos) => {
+				target.DrawLine(pos, oldPos, float3.All(0.5f));
+				oldPos = pos;
+			});
+
+
+			domain.For("Pos3f, Vel3f, ref OldPos3f, Color, SelfDestruct").Run(scope (pos,vel,oldPos,color,destr) => {
+				let pos2 = pos;
+				let oldPos2 = oldPos;
+
+				target.DrawLine(pos2, oldPos2, color.v * (destr.t/0.03f));
+				oldPos = pos;
+			});
+
+			domain.For("Pos3f, Vel3f, ref OldPos3f, PlayerTag").Run(scope (pos,vel,oldPos,ply) => {
+				let rng = scope Random(ply.id);
+				target.DrawLine(pos, oldPos, .(rand(rng,0,1), rand(rng,0,1), rand(rng,0,1)));
+				oldPos = pos;
+
+				/*let r = 0.04f;
+				for (let j < image.height) {
+					for (let i < image.width) {
+						let dp = image.ScrerecoClip(.(i, j)) - p[i0];
+						let len2 = (dp.x*dp.x + dp.y*dp.y);
+
+						if (len2 < r*r) {
+							image[i, j] = .All(1 - Sqrt(len2)/r);
+						}
+					}
+				}*/
+			});
+
+			domain.For("Shield, Pos3f").Run(scope (shield, pos) => {
+				var i = 0;
+				while (i < 16) {
+					let m = 2f/16 * Math.PI_f;
+					let p = pos + shield.r * float2(Math.Cos(i*m), Math.Sin(i*m));
+					i++;
+					let op = pos + shield.r * float2(Math.Cos(i*m), Math.Sin(i*m));
+					target.DrawLine(p, op, float3(0.2f,0.1f,0.5f));
+				}
+			});
 		});
 	}
 
-	void ISim.Advance(float dt) {
+
+	public override void Advance(float dt) {
 		var dt;
 		dt *= 0.125f;
 
-		domain.Refresh();
+		domain.For("ref Vel3f, Pos3f (-Camera)").Run(scope (vel, pos) => {
+			var acc = float3(0,0);
+			if (Main.Instance.MouseL) {
+				acc += mouseWorldPos - pos;
+			}
+			vel += acc * dt * 100;
+		});
 
-		domain.For("Pos3f,ref Vel3f,OldPos3f (+GravAbsorber)").Run(scope (pos,vel,oldPos) => {
+		domain.For("Pos3f,ref Vel3f (+GravAbsorber)").Schedule(scope (pos,vel) => {
 			vel *= Math.Exp(-0.1f*dt);
-			domain.For("Pos3f,Vel3f,OldPos3f (+GravEmitter)").Run(scope [&](pos2,vel2,oldPos2) => {
-				if (pos == pos2) return;
+			domain.For("Pos3f (+GravEmitter)").Run(scope [&](pos2) => {
 				let dp = (pos - pos2);
 				let len = dp.x*dp.x + dp.y*dp.y + dp.z*dp.z;
-				vel += dp/(len)*dt*-0.1f;
+				vel += dp/Math.Max(0.00001f,len)*dt*-0.1f;
 			});
-		});
+		}).WaitFor();
 
 		CommonMutators.AdvanceMotion(domain, dt);
 		CommonMutators.Lessen<Vel3f>(domain, dt, 2f);
 		CommonMutators.Shift<Vel3f>(domain, dt, .(0.1f, 0.2f, 0.f));
 
-		domain.For("ref Pos3f, ref Vel3f").Run(scope (pos,vel) => {
+		domain.For("ref Pos3f, ref Vel3f (-Camera)").Schedule(scope (pos,vel) => {
 			vel.x -= 0.05f*dt;
 			vel.z = 0;
 			pos.z = 0;
 			if (pos.x < -0.5f)
 				vel.x = Abs(vel.x);
-		});
+		}).WaitFor();
 
-		domain.For("RecordId, ref SelfDestruct").Run(scope (id, s) => {
+		domain.For("EntityId, ref SelfDestruct").Run(scope (id, s) => {
 			if ((s.t -= dt) <= 0)
 				domain.Remove(id);
 		});
 
-		domain.For("Shield, Pos3f").Run(scope (shield, pos) => {
+		domain.For("Shield, Pos3f").Schedule(scope (shield, pos) => {
 			domain.For("Pos3f, ref Vel3f").Run(scope (p,v) => {
 				let dp = p - pos;
 				if (len2(dp) < shield.r * shield.r) {
 					v += dp * dt * 1000;
 				}
 			});
-		});
+		}).WaitFor();
 
-		domain.For("ref Vel3f, SelfDestruct, RecordId (+Bullet)").Run(scope (v,s,id) => {
+		domain.For("ref Vel3f, SelfDestruct, EntityId (+Bullet)").Run(scope (v,s,id) => {
 			v += float2(Math.Cos(s.t*600 + id.idx.GetHashCode()), Math.Sin(s.t*600 + id.idx.GetHashCode())) * dt * 40;
 		});
 
 		domain.For("Bond").Run(scope (bond) => {
 		});
+
+		domain.Refresh();
 	}
 
 	float len2(float3 v) {
@@ -182,37 +212,36 @@ class Sim0: ISim
 		return acc;
 	}
 
-
+	/*
 	void ISim.Act(SDL2.SDL.KeyboardEvent event) {
 		var did = 0;
 		switch(event.keysym.scancode) {
 		case .Pageup:
-			domain.For("RecordId (-PlayerTag)").Run(scope [&](id) => {
-				if (did++ > 0) return;
-				Console.WriteLine(id.idx.ToString(..scope .()));
+			domain.For("EntityId (-PlayerTag)").Run(scope [&](id) => {
+				if (did++ != 1) return;
 				domain.Change(id, .Set(PlayerTag(15)), .Set(Shield(0.1f)));
 			});
 
 		case .PageDown:
-			domain.For("RecordId (+PlayerTag)").Run(scope [&](id) => {
-				if (did++ > 0) return;
-				Console.WriteLine(id.idx.ToString(..scope .()));
+			domain.For("EntityId (+PlayerTag)").Run(scope [&](id) => {
+				if (did++ != 1) return;
 				domain.Change(id, .Remove<PlayerTag>());
 			});
 
 		case .Insert:
-			add(?);
+			for (let i < 200)
+				add(?, false);
 			Console.WriteLine(domain.Count);
 
 		case .Delete:
-			domain.For("RecordId").Run(scope [&](id) => {
+			domain.For("EntityId").Run(scope [&](id) => {
 				if (did++ > 0) return;
 				domain.Remove(id);
 			});
 
 		case .L:
 			var i = 0;
-			domain.For("RecordId").Run(scope (id) => {
+			domain.For("EntityId").Run(scope (id) => {
 				Console.Write("   ");
 				Console.WriteLine(id.idx);
 			}, scope [&](table) => { Console.WriteLine(scope $"\ntable{i++}:"); return true; });
@@ -257,7 +286,7 @@ class Sim0: ISim
 		default:
 		}
 
-		Random rnd = scope .();
+		Random rnd = scope .(0);
 		domain.For("ref Vel3f, Pos3f, PlayerTag").Run(scope (vel, pos, tag) => {
 			var acc = float3(0,0);
 			if (tag.id == 15) {
@@ -267,20 +296,22 @@ class Sim0: ISim
 			}
 			vel += acc;
 			if (acc != default) {
-				domain.Add(pos, (Vel3f)(vel - acc*10), (OldPos3f)(float3)pos, SelfDestruct(0.03f+rnd.Next(10)*0.01f), Bullet());
+				domain.Add(pos, (Vel3f)(vel - acc*10), (OldPos3f)(float3)pos, SelfDestruct(0.03f+rnd.Next(10)*0.01f), Bullet(), Color(float3(rand(rng,0.1f,0.7f), rand(rng,0.1f,0.7f), rand(rng,0.5f,0.6f))));
 			}
 		});
 	}
-	
+
+	*/
+
 		/*
 	{
-		RecordTable ur = new .((typeof(float), "x"), (typeof(int), "y")); defer delete ur;
+		EntityTable ur = new .((typeof(float), "x"), (typeof(int), "y")); defer delete ur;
 		let a = ur.AddLater(.Create("x", 0.515f), .Create("y", 515512));
 		let b = ur.AddLater(.Create("x", 35f), .Create("y", 45));
 
 		ur..RemoveLater(a)..Refresh();
 
-		RecordStorage r = scope .();
+		Entitiestorage r = scope .();
 		r.tables.Add(ur);
 
 		r.For("float, "x", int, "y">(scope (x, y) => {

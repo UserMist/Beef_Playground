@@ -1,11 +1,11 @@
 namespace Playground;
 
-class Mesh3
+public class Mesh3
 {
 
 }
 
-abstract class CPUShader
+public abstract class SurfaceCPUShader3
 {
 
 }

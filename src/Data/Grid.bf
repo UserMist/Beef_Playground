@@ -8,6 +8,8 @@ public class Grid2<T>
 	[Inline] public int height => cells.GetLength(0);
 	public T[,] cells ~ delete _;
 
+	public double widthRatio => double(width)/height;
+
 	public this(int2 wh) {
 		cells = new .[wh.y, wh.x];
 	}
@@ -16,13 +18,13 @@ public class Grid2<T>
 		cells = new .[height, width];
 	}
 
-	public T this[int rawX, int rawY] {
-		get => cells[rawY, rawX];
+	public ref T this[int rawX, int rawY] {
+		get => ref cells[rawY, rawX];
 		set => cells[rawY, rawX] = value;
 	}
 
-	public T this[int2 rawXY] {
-		get => cells[rawXY.y, rawXY.x];
+	public ref T this[int2 rawXY] {
+		get => ref cells[rawXY.y, rawXY.x];
 		set => cells[rawXY.y, rawXY.x] = value;
 	}
 
@@ -35,6 +37,18 @@ public class Grid2<T>
 	public void Set(Grid2<T> image) {
 		//image.array.CopyTo(array = new .[image.array.Count]);
 		ThrowUnimplemented();
+	}
+
+	public void EnsureSize(int width, int height) {
+		if (this.width == width && this.height == height)
+			return;
+
+		delete cells;
+		cells = new .[height, width];
+	}
+
+	public void CopyTo(Grid2<T> that) {
+		Internal.MemCpy(that.cells.Ptr, cells.Ptr, cells.Count * sizeof(T));
 	}
 
 	public void CopyTo(Grid2<T> that, int2 atRaw = .(0, 0)) {
@@ -145,7 +159,7 @@ public class Grid2<T>
 		var p2 = (float2) p;
 		p2 /= .(width - 1, height - 1);
 		p2 -= .All(1);
-		p2.y = -p.y;
+		p2.y = -p2.y;
 		return p2;
 	}
 

@@ -1,25 +1,29 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-namespace Playground.Data.Record;
+namespace Playground.Data.Entity;
 
-using Playground.Data.Record.Components; //required for codegen
+using Playground.Data.Entity.Components; //required for codegen
 
-/// A subset of RecordDomain. All records in it have same composition.
-public class RecordTable: IRecordTable
+/// A subset of EntityDomain. All entities in it have same composition.
+public class EntityTable: IEntityTable
 {
-	private List<RecordSplitList> chunks;
-	public Dictionary<RecordId, (int, int)> indexing;
+	private List<EntitySplitList> chunks;
+	public Dictionary<EntityId, (int, int)> indexing;
 	public int CapacityPerChunk => chunks[0].Capacity;
 
 	public bool UsesPlainSpans => true;
 	public int ChunkCount => chunks.Count;
-	public int RecordCountForChunk(int idx) => chunks[idx].Count;
-	public (int, int) LocateRecord(RecordId id) => indexing[id];
+	public int EntityCountForChunk(int idx) => chunks[idx].Count;
+	public (int, int)? LocateEntity(EntityId id) {
+		if (indexing.TryGetValue(id, let value))
+			return value;
+	   return null;
+	}
 	
 	public void GetComponentChunk(int idx, Component.Type.Key typekey, out void* ptr, out int stride) {
 		let chunk = chunks[idx];
-		Runtime.Assert(chunk.header.TryGetValue(typekey, let info), scope $"Component({idx}) is not present");
+		let info = chunk.header[typekey];
 		ptr = (void*)((int)(void*)(chunk.[Friend]raw.Ptr) + info.binarySpanStart);
 		stride = info.componentType.type.Stride;
 	}
@@ -38,7 +42,7 @@ public class RecordTable: IRecordTable
 	
 	public this(int capacityPerChunk, params Span<Component.Type> header) {
 		Component.Type[] mHeader = scope .[header.Length + 1];
-		mHeader[0] = .Create<RecordId>();
+		mHeader[0] = .Create<EntityId>();
 		for (let i < header.Length) {
 			mHeader[i + 1] = header[i];
 		}
@@ -46,7 +50,7 @@ public class RecordTable: IRecordTable
 	}
 	
 	private void init<T>(int capacityPerChunk, Span<T> header) where T: IComponent.Type {
-		chunks = new .(1)..Add(new RecordSplitList()..Init(capacityPerChunk, header));
+		chunks = new .(1)..Add(new EntitySplitList()..Init(capacityPerChunk, header));
 		indexing = new .(32);
 	}
 	
@@ -55,9 +59,9 @@ public class RecordTable: IRecordTable
 			let chunk = chunks[chunkIdx];
 
 			var removalStart = int.MaxValue;
-			let idSpan = chunk.Span<RecordId>();
+			let idSpan = chunk.Span<EntityId>();
 			for (let k1 in chunk.[Friend]removalQueue) {
-				indexing.Remove(idSpan[k1.idx]);
+				Runtime.Assert(indexing.Remove(idSpan[k1.idx]));
 				removalStart = Math.Min(removalStart, k1.idx);
 			}
 
@@ -65,40 +69,41 @@ public class RecordTable: IRecordTable
 
 			for (var i = removalStart; i < chunk.Count; i++) {
 				let id = idSpan[i];
-				indexing[id] = (indexing[id].0, i);
+				indexing.Remove(id);
+				indexing.Add(id, (id.indexer, i));
 			}
 		}
 	}
 
-	public bool DetailedRemove(RecordId id, bool destructive) {
-		if (indexing.TryGetValue(id, let k))
+	public bool DetailedRemove(EntityId id, bool destructive) {
+		if (!indexing.TryGetValue(id, let k))
 			return false;
 		return chunks[k.0].Remove(k.1, destructive);
 	}
 
-	public RecordId Add(params Span<Component> components)
+	public EntityId Add(params Span<Component> components)
 		=> DetailedAdd(components, true);
 
-	static Random idGenerator = new .() ~ delete _;
-	public RecordId DetailedAdd(Span<Component> components, bool dispose) {
-		RecordId id = ?;
-		while (indexing.ContainsKey(id = RecordId(0, idGenerator.NextU32())))
+	static Random idGenerator = new .(0) ~ delete _;
+	public EntityId DetailedAdd(Span<Component> components, bool dispose) {
+		EntityId id = ?;
+		while (indexing.ContainsKey(id = EntityId(0, idGenerator.NextU32())))
 			continue;
 		return add(..id, dispose, components);
 	}
 
-	/// For importing record data only
-	public bool DetailedAdd(Span<Component> components, bool dispose, RecordId id) {
+	/// For importing entity data only
+	public bool DetailedAdd(EntityId id, Span<Component> components, bool dispose) {
 		if (indexing.ContainsKey(id))
 			return false;
 		add(id, true, components);
 		return true;
 	}
 
-	private void add(RecordId id, bool dispose, Span<Component> components) {
+	private void add(EntityId id, bool dispose, Span<Component> components) {
 		Component[] realValues = populate(..scope Component[components.Length + 1], components, id);
 		defer realValues[0].Dispose();
-		defer { if (dispose) for (let i < realValues.Count-1) realValues[i+1].Dispose();} //todo
+		defer { if (dispose) for (let i < realValues.Count-1) realValues[i+1].Dispose();}
 
 		for (let chunk in chunks) {
 			if (chunk.AddWithoutResize(params realValues)) {
@@ -107,13 +112,13 @@ public class RecordTable: IRecordTable
 			}
 		}
 
-		let chunk = chunks.Add(..new RecordSplitList(chunks[0]));
+		let chunk = chunks.Add(..new EntitySplitList(chunks[0]));
 		chunk.AddWithoutResize(params realValues);
 		indexing.Add(id, (chunks.Count-1, chunk.[Friend]count-1));
 		return;
 	}
 
-	private void populate(Span<Component> rawComponents, Span<Component> components, RecordId id) {
+	private void populate(Span<Component> rawComponents, Span<Component> components, EntityId id) {
 		rawComponents[0] = .Create(id);
 		for (let i < components.Length)
 			rawComponents[i + 1] = components[i];

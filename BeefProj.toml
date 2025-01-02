@@ -3,7 +3,7 @@ Dependencies = {corlib = "*", SDL2 = "*"}
 
 [Project]
 Name = "Playground"
-StartupObject = "Playground.Program"
+StartupObject = "Playground.Main"
 
 [Configs.Release.Win64]
 OptimizationLevel = "O3"

@@ -1,11 +1,11 @@
 FileVersion = 1
-LastConfig = "Release"
+LastConfig = "Debug"
 LastPlatform = "Win64"
-RecentFilesList = ["src\\Program.bf", "Disassembly", "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Collections\\List.bf", "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Random.bf", "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\String.bf", "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Math.bf"]
+RecentFilesList = ["src\\Functions\\Vec.bf", "src\\Subprograms\\ImageEditor.bf", "src\\Subprograms\\Sim1.bf", "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Result.bf", "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Reflection\\AttributeInfo.bf", "src\\Subprograms\\Sim2.bf", "src\\Data\\Entity\\6 IEntityTable.bf", "src\\Net\\NetStream.bf", "src\\Data\\AssetTools.bf", "src\\Net\\NetWriter.bf", "src\\Main.bf", "src\\CommonMutators.bf", "src\\Data\\Grid.bf", "Disassembly", "c:\\Program Files\\BeefLang\\BeefLibs\\SDL2\\src\\SDL2.bf", "Disassembly", "Disassembly"]
 
 [MainWindow]
-X = 65
-Y = 13
+X = 1162
+Y = 100
 Width = 1173
 Height = 1045
 ShowKind = "ShowMaximized"
@@ -22,145 +22,265 @@ Type = "DockingFrame"
 SplitType = 1
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets]]
-RequestedWidth = 475.0
+RequestedWidth = 438.0
 RequestedHeight = 581.28
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
 TabLabel = "Workspace"
-TabWidth = 114.0351
+TabWidth = 116.3266
 TabIsPinned = false
 Type = "ProjectPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets]]
 IsFillWidget = true
 Permanent = true
-RequestedWidth = 150.0
+RequestedWidth = 1477.8
 RequestedHeight = 150.0
-SizePriority = 150.0
+SizePriority = 1477.8
 DefaultDocumentsTabbedView = true
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "List.bf"
-TabWidth = 64.21053
+Active = true
+TabLabel = "Vec.bf"
+TabWidth = 76.53069
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Collections\\List.bf"
-CursorPos = 3462
-VertPos = 3477.0
+FilePath = "src\\Functions\\Vec.bf"
+CursorPos = 2011
+VertPos = 240.0
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "ImageEditor.bf"
+TabWidth = 126.5307
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Subprograms\\ImageEditor.bf"
+CursorPos = 443
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Result.bf"
+TabWidth = 90.81641
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Result.bf"
+CursorPos = 4121
+VertPos = 4064.0
 ProjectName = "corlib"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "AttributeInfo.bf"
+TabWidth = 128.5715
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\Reflection\\AttributeInfo.bf"
+CursorPos = 13332
+VertPos = 8176.0
+ProjectName = "corlib"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Sim2.bf"
+TabWidth = 73.87759
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Subprograms\\Sim2.bf"
+CursorPos = 922
+VertPos = 302.0
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "NetStream.bf"
+TabWidth = 108.5715
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Net\\NetStream.bf"
+CursorPos = 72
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "AssetTools.bf"
+TabWidth = 108.5715
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Data\\AssetTools.bf"
+CursorPos = 1148
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "NetWriter.bf"
+TabWidth = 102.4491
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Net\\NetWriter.bf"
+CursorPos = 1070
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "SDL2.bf"
+TabWidth = 74.898
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "c:\\Program Files\\BeefLang\\BeefLibs\\SDL2\\src\\SDL2.bf"
+CursorPos = 107331
+ProjectName = "SDL2"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Disassembly"
-TabWidth = 121.9298
+TabWidth = 123.4695
 TabIsPinned = false
 Type = "DisassemblyPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "String.bf"
-TabWidth = 79.1228
+TabLabel = "Grid.bf"
+TabWidth = 70.81637
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "c:\\Program Files\\BeefLang\\BeefLibs\\corlib\\src\\String.bf"
-CursorPos = 1823
-ProjectName = "corlib"
+FilePath = "src\\Data\\Grid.bf"
+CursorPos = 580
+ProjectName = "Playground"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-Active = true
-TabLabel = "Program.bf"
-TabWidth = 94.91228
+TabLabel = "CommonMutators.bf"
+TabWidth = 153.4695
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "src\\Program.bf"
-CursorPos = 1646
-VertPos = 399.0
-ProjectName = "Playground_Lines"
+FilePath = "src\\CommonMutators.bf"
+CursorPos = 557
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Sim1.bf"
+TabWidth = 73.87759
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Subprograms\\Sim1.bf"
+CursorPos = 12
+ProjectName = "Playground"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Main.bf"
+TabWidth = 74.898
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src\\Main.bf"
+CursorPos = 1553
+ProjectName = "Playground"
 
 [[MainDockingFrame.DockedWidgets]]
 RequestedWidth = 250.0
-RequestedHeight = 366.0
+RequestedHeight = 341.0
 Type = "DockingFrame"
 SplitType = 1
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets]]
 RequestedWidth = 250.0
 RequestedHeight = 250.0
-SizePriority = 0.0917623
+SizePriority = 0.4109375
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Class View"
+TabWidth = 112.245
+TabIsPinned = false
+Type = "ClassViewPanel"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Profile"
+TabWidth = 87.75514
+TabIsPinned = false
+Type = "ProfilePanel"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Autocomplete"
-TabWidth = 133.3333
+TabWidth = 132.6531
 TabIsPinned = false
 Type = "AutoCompletePanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Modules"
-TabWidth = 100.0
+TabWidth = 102.0409
 TabIsPinned = false
 Type = "ModulePanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Diagnostics"
-TabWidth = 117.5439
+TabWidth = 118.3674
 TabIsPinned = false
 Type = "DiagnosticsPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+Active = true
 TabLabel = "Watch"
-TabWidth = 86.84211
+TabWidth = 86.73473
 TabIsPinned = false
 Type = "WatchPanel"
-Columns = [{Width = 168.0}, {Width = 168.0}, {Width = 168.0}]
+Columns = [{Width = 162.0}, {Width = 516.0}, {Width = 162.0}]
+Items = ["did", "queryInc", "s", "col2", "col", "m", "m2", "id", ""]
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-Active = true
 TabLabel = "Auto"
-TabWidth = 78.07018
+TabWidth = 77.55105
 TabIsPinned = false
 Type = "AutoWatchPanel"
-Columns = [{Width = 172.0}, {Width = 172.0}, {Width = 172.0}]
+Columns = [{Width = 166.0}, {Width = 166.0}, {Width = 166.0}]
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets]]
-RequestedWidth = 250.0
-RequestedHeight = 250.0
-SizePriority = 0.9082378
+RequestedWidth = 1918.0
+RequestedHeight = 279.0
+SizePriority = 0.5890625
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+Active = true
+TabLabel = "Find Results"
+TabWidth = 120.4082
+TabIsPinned = false
+Type = "FindResultsPanel"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Threads"
-TabWidth = 95.61404
+TabWidth = 97.95923
 TabIsPinned = false
 Type = "ThreadPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Call Stack"
-TabWidth = 106.1404
+TabWidth = 106.1225
 TabIsPinned = false
 Type = "CallStackPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Immediate"
-TabWidth = 113.1579
+TabWidth = 112.245
 TabIsPinned = false
 Type = "ImmediatePanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-Active = true
 TabLabel = "Output"
-TabWidth = 90.35088
+TabWidth = 90.81637
 TabIsPinned = false
 Type = "OutputPanel"
 
 [[Breakpoints]]
-File = "src\\Program.bf"
-Line = 345
+File = "src\\Data\\RecordList.bf"
+Line = 144
 Column = 2
 
 [[BookmarkFolders]]
 Title = ""
+
+[DebuggerDisplayTypes."FarFromHome.Game.mouse_fffpos"]
+FloatDisplayType = "Full"
+
+[DebuggerDisplayTypes.bias]
+IntDisplayType = "Decimal"
+
+[DebuggerDisplayTypes.""]
+IntDisplayType = "Decimal"
 
 [OutputFilters]
 ModuleLoadMessages = false

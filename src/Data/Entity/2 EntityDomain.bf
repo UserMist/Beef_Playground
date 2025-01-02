@@ -1,48 +1,48 @@
 using System;
 using System.Collections;
 using System.Threading;
-namespace Playground.Data.Record;
+namespace Playground.Data.Entity;
 
-using Playground.Data.Record.Components; //required for codegen
+using Playground.Data.Entity.Components; //required for codegen
 
-/// Collection of records with varying component compositions. Each record at least has a RecordId component.
-public class RecordDomain
+/// Collection of entities with varying component compositions. Each entity at least has a EntityId component.
+public class EntityDomain
 {
 	public int DefaultCapacityPerChunk = 256;
-	public List<IRecordTable> tables = new .() ~ DeleteContainerAndItems!(_);
-	private Dictionary<Query, List<IRecordTable>> queryCache = new .() ~ DeleteDictionaryAndValues!(_);
+	public List<IEntityTable> tables = new .() ~ DeleteContainerAndItems!(_);
+	private Dictionary<Query, List<IEntityTable>> queryCache = new .() ~ DeleteDictionaryAndValues!(_);
 	bool invalidateQueryCache = false;
 
-	public Dictionary<uint32, IRecordTable> sequences = new .() ~ DeleteDictionaryAndValues!(_);
+	public Dictionary<uint32, IEntityTable> sequences = new .() ~ DeleteDictionaryAndValues!(_);
 
 	public int Count {
 		get {
 			var c = 0;
-			for (let table in tables) c += table.RecordCount;
+			for (let table in tables) c += table.EntityCount;
 			return c;
 		}
 	}
 
-	public void ForTables(delegate void(IRecordTable) method) {
+	public void ForTables(delegate void(IEntityTable) method) {
 		for (let table in tables)
 			method(table);
 	}
 
-	public void ForTables(delegate void(IRecordTable) method, delegate bool(IRecordTable) selector) {
-		for (let records in tables)
-			if (selector(records))
-				method(records);
+	public void ForTables(delegate void(IEntityTable) method, delegate bool(IEntityTable) selector) {
+		for (let entities in tables)
+			if (selector(entities))
+				method(entities);
 	}
 
-	public RecordId Add(params Span<Component> components) {
-		return reserveTable<Component>(0, params components).DetailedAdd(components, true);
+	public EntityId Add(params Span<Component> components) {
+		return reserveTable<Component>(0, DefaultCapacityPerChunk, components).DetailedAdd(components, true);
 	}
 
-	public RecordId Add(uint32 indexer, params Span<Component> components) {
-		return reserveTable<Component>(indexer, params components).DetailedAdd(components, true);
+	public EntityId Add(uint32 indexer, params Span<Component> components) {
+		return reserveTable<Component>(indexer, DefaultCapacityPerChunk, components).DetailedAdd(components, true);
 	}
 
-	public bool Remove(RecordId id) {
+	public bool Remove(EntityId id) {
 		for (let table in tables) {
 			if (table.DetailedRemove(id, true))
 				return true;
@@ -62,66 +62,90 @@ public class RecordDomain
 			=> .() { typeKey = T.TypeKey };
 	}
 
-	public bool Change(RecordId id, params Span<Change> changes) {
+	public bool Change(EntityId id, params Span<Change> changes) {
 		for (let table in tables) {
-			let indexing = table.LocateRecord(id);
+			let indexingRaw = table.LocateEntity(id);
+			if (!indexingRaw.HasValue) { continue; }
+			let indexing = indexingRaw.ValueOrDefault;
 
-			if (indexing != default) {
-				let components = new List<Component>(changes.Length * 2); defer delete components;
-				let header = table.GetComponentTypes(..scope .());
+			let components = new List<Component>(changes.Length * 2); defer delete components;
+			let header = table.GetComponentTypes(..scope .());
 
-				for (let change in changes) if (change.component.HasValue) {
-					components.Add(change.component.ValueOrDefault);
-				}
-	
-				for (let type in header) {
-					var remove = false;
-					for (let j < changes.Length) if (type.TypeKey == changes[j].typeKey) {
-						remove = true;
-						break;
-					}
-					
-					if (!remove) {
-						table.GetComponentChunk(indexing.0, type.TypeKey, let ptr, let stride);
-						let ptr2 = (uint8*) ptr;
-						components.Add(.(type.typeKey, type.destructor, .Create(type.type, &ptr2[stride*indexing.1])));
-					}
-				}
-	
-				return transfer(id, table, components);
+			for (let change in changes) if (change.component.HasValue) {
+				components.Add(change.component.ValueOrDefault);
 			}
+	
+			for (let type in header) {
+				var remove = false;
+				for (let j < changes.Length) if (type.TypeKey == changes[j].typeKey) {
+					remove = true;
+					break;
+				}
+
+				if (!remove) {
+					table.GetComponentChunk(indexing.0, type.TypeKey, let ptr, let stride);
+					let ptr2 = (uint8*) ptr;
+					components.Add(.(type.typeKey, type.destructor, .Create(type.type, &ptr2[stride*indexing.1])));
+				}
+			}
+
+			return transfer(id, table, components);
 		}
 		return false;
 	}
 
-	private bool transfer(RecordId id, IRecordTable from, Span<Component> components) {
-		//let indexing = from.LocateRecord(id);
-		//Runtime.Assert(!from.[Friend]chunks[indexing.0].[Friend]removalQueue.Contains(indexing.1), "Attempted to change components of absent record");
+	private bool transfer(EntityId id, IEntityTable from, Span<Component> components) {
+		//let indexing = from.LocateEntity(id);
+		//Runtime.Assert(!from.[Friend]chunks[indexing.0].[Friend]removalQueue.Contains(indexing.1), "Attempted to change components of absent entity");
 
 		Runtime.Assert(id.indexer == 0);
 
-		let table2 = reserveTable<Component>(id.indexer, params components);
+		let table2 = reserveTable<Component>(id.indexer, DefaultCapacityPerChunk, components);
+		if (table2 == from) {
+			for (let component in components)
+				component.value.CopyValueData(getPtrById(table2, id, component.typeKey));
+			return true;
+		}
+
 		if (!table2.DetailedAdd(id, components, true)) {
 			return false;
 		}
 		from.DetailedRemove(id, false);
+		from.RefreshChunks();
 		return true;
 	}
-	
-	private IRecordTable reserveTable<T>(uint32 indexer, params Span<T> rawComponents) where T: IComponent.Type
-		=> reserveTable<T>(indexer, DefaultCapacityPerChunk, params rawComponents);
 
-	private IRecordTable reserveTable<T>(uint32 indexer, int capacityPerChunk, params Span<T> rawComponents) where T: IComponent.Type {
+	private void* getPtrById(IEntityTable table, EntityId id, Component.Type.Key typekey) {
+		let indexing = table.LocateEntity(id).Value;
+		table.GetComponentChunk(indexing.0, typekey, let ptr, let stride);
+		return &((uint8*)ptr)[stride*indexing.1];
+	}
+
+	private IEntityTable reserveTable<T>(uint32 indexer, int capacityPerChunk, Span<T> components) where T: IComponent.Type {
 		if (indexer == 0) {
-			let rawTypekeys = scope Component.Type.Key[rawComponents.Length];
-			for (let i < rawComponents.Length) {
-				rawTypekeys[i] = rawComponents[i].TypeKey;
+
+			var insertId = true;
+			for (let c in components) if (c.TypeKey == EntityId.TypeKey) {
+				insertId = false;
+				break;
 			}
-			for (let table in tables) if (table.HasOnly(params rawTypekeys)) {
+
+			let off = (insertId? 1 : 0);
+			let types = scope Component.Type[components.Length + off];
+			let typekeys = scope Component.Type.Key[components.Length + off];
+			if (insertId) {
+				types[0] = .Create<EntityId>();
+				typekeys[0] = EntityId.TypeKey;
+			}
+			for (let i < components.Length) {
+				types[i+off] = .Create(components[i]);
+				typekeys[i+off] = components[i].TypeKey;
+			}
+			for (let table in tables) if (table.HasOnly(params typekeys)) {
 				return table;
 			}
 			invalidateQueryCache = true;
-			return tables.Add(..new RecordTable()..[Friend]init(DefaultCapacityPerChunk, rawComponents));
+			return tables.Add(..new EntityTable()..[Friend]init<Component.Type>(DefaultCapacityPerChunk, types));
 		}
 
 		Runtime.Assert(sequences.TryGetValue(indexer, let table));
@@ -141,10 +165,18 @@ public class RecordDomain
 		}
 	}
 
+	public Result<T> GetComponent<T>(EntityId id) where T: IComponent {
+		for (let table in tables) {
+			if (!table.LocateEntity(id).HasValue) continue;
+			return *(T*)getPtrById(table, id, T.TypeKey);
+		}
+		return .Err;
+	}
+
 	public struct JobHandle
 	{
-		public List<RecordTable.JobHandle> events = new .();
-		public RecordDomain domain;
+		public List<EntityTable.JobHandle> events = new .();
+		public EntityDomain domain;
 
 		public bool WaitFor(int waitMS = -1) {
 			while (events.Count > 0) {
@@ -201,12 +233,12 @@ public class RecordDomain
 	public QueryBuilder<S> For<S>(S s) where S:const String
 		=> .(this);
 
-	public struct QueryBuilder<S>: this(RecordDomain domain) where S: const String
+	public struct QueryBuilder<S>: this(EntityDomain domain) where S: const String
 	{
 
 		[OnCompile(.TypeInit), Comptime]
 		static void emit() {
-			let s = S == null? "RecordId" : S;
+			let s = S == null? "EntityId" : S;
 
 			var excludeOtherTypeNames = false;
 			var includedTypeNames = scope List<StringView>(), excludedTypeNames = scope List<StringView>();
@@ -214,39 +246,34 @@ public class RecordDomain
 			let filterStart = s.IndexOf('(');
 			var signature = s.Substring(0, filterStart < 0? s.Length : filterStart);
 			var ordinalName = scope String();
-			if (!s.IsEmpty) for (var typeName in signature.Split(',')) {
-				typeName..Trim();
+			for (var typeName in signature.Split(',')) if (!typeName..Trim().IsEmpty) {
 				let byRef = typeName.StartsWith("ref ");
 				let typeNameNaked = byRef? typeName.Substring(4)..TrimStart() : typeName;
 
 				if (typeNameNaked.EndsWith("Ordinal")) {
-					Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per record is allowed");
+					Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per entity is allowed");
 					ordinalName.Set(typeNameNaked);
 				}
 				includedTypeNames.Add(typeNameNaked);
 			}
 
 			var ordinalInFilter = false;
-			var filterIdx = filterStart+1;
-			while (filterStart >= 0 && filterIdx >= 0 && filterIdx < s.Length) {
-				var filterEnd = s.IndexOfAny(scope char8[2]('+', '-'), filterIdx + 1);
-				if (filterEnd < 0) filterEnd = s.LastIndexOf(')');
-
-				let item = s[filterIdx..<filterEnd]..Trim();
-				if (item.StartsWith('+')) {
+			if (filterStart >= 0) for (var i = filterStart + 1; i < s.Length; i++) {
+				let i0 = i+1;
+				if (s[i] == '+') {
+					while (s[++i] != ' ' && s[i] != ')') continue;
+					let item = includedTypeNames.Add(..s[i0..<i]);
 					if (item.EndsWith("Ordinal")) {
-						Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per record is allowed");
+						Runtime.Assert(ordinalName.IsEmpty, "Only 1 ordinal component per entity is allowed");
 						ordinalName.Set(item);
 						ordinalInFilter = true;
 					}
-					includedTypeNames.Add(item.Substring(1));
-				} else if (item.StartsWith("-*")) {
+				} else if (s[i] == '-' && s[i+1] == '*') {
 					excludeOtherTypeNames = true;
-				} else if (item.StartsWith('-')) {
-					excludedTypeNames.Add(item.Substring(1));
+				} else if (s[i] == '-') {
+					while (s[++i] != ' ' && s[i] != ')') continue;
+					excludedTypeNames.Add(s[i0..<i]);
 				}
-
-				filterIdx = filterEnd + 1;
 			}
 
 			signature..TrimEnd();
@@ -308,9 +335,9 @@ public class RecordDomain
 		private static void snippetDefGetTables(String code, StringView filter) {
 			code += scope $"""
 
-				private List<IRecordTable> getTables() {{
+				private List<IEntityTable> getTables() {{
 					if (!domain.[Friend]queryCache.TryGetValue(query, var tables)) {{
-						tables = new List<IRecordTable>();
+						tables = new List<IEntityTable>();
 						domain.[Friend]queryCache[query] = tables;
 						for (let table in domain.tables) if ({filter}) tables.Add(table);
 					}}
@@ -332,13 +359,13 @@ public class RecordDomain
 
 		[Comptime]
 		private static void snippetRun(String code, StringView signature, bool useSelector) {
-			let selectorArg  = !useSelector? "" : ", delegate bool(IRecordTable table) selector";
+			let selectorArg  = !useSelector? "" : ", delegate bool(IEntityTable table) selector";
 			let selectorCond = !useSelector? "" : " if (selector(table))";
 			code += scope $"""
 
 				public void Run(delegate void({signature}) method{selectorArg}) {{
 					let tables = getTables();
-					for (let table in tables){selectorCond} RecordTable.For(table, "{signature}").Run(method);
+					for (let table in tables){selectorCond} EntityTable.For(table, "{signature}").Run(method);
 				}}
 
 			""";
@@ -346,14 +373,14 @@ public class RecordDomain
 
 		[Comptime]
 		private static void snippetSchedule(String code, StringView signature, bool useSelector) {
-			let selectorArg  = !useSelector? "" : ", delegate bool(IRecordTable table) selector";
+			let selectorArg  = !useSelector? "" : ", delegate bool(IEntityTable table) selector";
 			let selectorCond = !useSelector? "" : " if (selector(table))";
 			code += scope $"""
 
 				public JobHandle Schedule(delegate void({signature}) method{selectorArg}, int concurrency = 8) {{
 					let handle = JobHandle() {{ domain = domain }};
 					let tables = getTables();
-					for (let table in tables){selectorCond} handle.events.Add(RecordTable.For(table, "{signature}").Schedule(method, concurrency));
+					for (let table in tables){selectorCond} handle.events.Add(EntityTable.For(table, "{signature}").Schedule(method, concurrency));
 					return handle;
 				}}
 

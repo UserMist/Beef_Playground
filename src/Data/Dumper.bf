@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 namespace Playground;
 
-interface IDumper
+public interface IDumper
 {
 	public enum Op
 	{
@@ -16,7 +16,7 @@ interface IDumper
 	bool IsPartialDumper => false;
 }
 
-class RawDumper: this(Type type), IDumper
+public class RawDumper: this(Type type), IDumper
 {
 	public void* AllocateDumpHolder() {
 		let alloc = (new uint8[type.Size]).Ptr;

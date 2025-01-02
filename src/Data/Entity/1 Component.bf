@@ -1,5 +1,5 @@
 using System;
-namespace Playground.Data.Record;
+namespace Playground.Data.Entity;
 
 public struct Component: this(Component.Type.Key typeKey, Component.Destructor destructor, Variant value), IDisposable, IComponent.Type
 {
@@ -13,10 +13,7 @@ public struct Component: this(Component.Type.Key typeKey, Component.Destructor d
 		=> value.Dispose();
 	
 	public static Self Create<T>(T value) where T: IComponent, struct
-		=> Self(T.TypeKey, T.Destructor, Variant.Create(value));
-
-	public static implicit operator Component.Type(Component v)
-		=> .(v.typeKey, v.Destructor, v.value.VariantType);
+		=> Self(T.TypeKey, (((null))), Variant.Create(value));
 
 	public struct Type: this(Component.Type.Key typeKey, Component.Destructor destructor, System.Type type), IComponent.Type
 	{
@@ -25,7 +22,7 @@ public struct Component: this(Component.Type.Key typeKey, Component.Destructor d
 		public Component.Destructor Destructor => destructor;
 
 		public static Component.Type Create<T>() where T: IComponent, struct
-			=> .(T.TypeKey, T.Destructor, typeof(T));
+			=> .(T.TypeKey, (((null))), typeof(T));
 
 		public static Component.Type Create(IComponent.Type componentType)
 			=> .(componentType.TypeKey, componentType.Destructor, componentType.Type);
@@ -77,6 +74,7 @@ public struct ComponentAttribute: this(uint32 typeKey, Type baseType = null), At
 				}
 				code += ") { }\n";
 			}
+			code += scope $"public static implicit operator Self({baseType.GetFullName(..scope .())} v) {{ var v; return *(Self*)&v; }}";
 		}
 
 		Compiler.EmitTypeBody(type, scope $"""

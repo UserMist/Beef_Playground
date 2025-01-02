@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-namespace Playground.Data.Record;
+namespace Playground.Data.Entity;
 
-/// SoA list for Record. It's a high-performance data structure, which allows marking for addition and removal (finished after refresh).
-public class RecordSplitList
+/// SoA list for Entity. It's a high-performance data structure, which allows marking for addition and removal (finished after refresh).
+public class EntitySplitList
 {
 	public Dictionary<Component.Type.Key, ComponentDescription> header;
 	private int count = 0;
@@ -29,7 +29,7 @@ public class RecordSplitList
 		Init(capacity, header);
 	}
 
-	public this(RecordSplitList template) {
+	public this(EntitySplitList template) {
 		let header = scope Component.Type[template.header.Count];
 		var i = 0;
 		for (let c in template.header.Values) {
@@ -175,7 +175,7 @@ public class RecordSplitList
 			let iOffset = info.binarySpanStart;
 			let srcOffset = activeBufferSize + iOffset;
 
-			if (destructor != null) for (let i < removalQueue.Count) {
+			if (destructor != null) for (let i < removalQueue.Count) if (removalQueue[i].destroy) {
 				destructor(&raw[i*stride]);
 			}
 
@@ -198,7 +198,7 @@ public class RecordSplitList
 			Internal.MemSet((.)(iOffset+rawSize + (int)(void*)raw.Ptr), 0, queueLength*stride);
 		}
 		count -= queueLength;
-		Runtime.Assert(count >= 0, "Attempted to remove more records than there are present");
+		Runtime.Assert(count >= 0, "Attempted to remove more entities than there are present");
 		removalQueue.Clear();
 	}
 

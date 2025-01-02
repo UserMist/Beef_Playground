@@ -5,14 +5,24 @@ namespace System
 	extension Math
 	{
 		public static Vec3<T> Max<T>(Vec3<T> a, Vec3<T> b)
-		where T: operator T+T, operator T-T, operator T*T, operator T/T, IIsNaN
+		where T: operator T+T, operator T-T, operator T*T, operator T/T
 		where bool: operator T<T
 			=> .(Max(a.x, b.x), Max(a.y, b.y), Max(a.z, b.z));
 
 		public static Vec3<T> Min<T>(Vec3<T> a, Vec3<T> b)
-		where T: operator T+T, operator T-T, operator T*T, operator T/T, IIsNaN
+		where T: operator T+T, operator T-T, operator T*T, operator T/T
 		where bool: operator T<T
 			=> .(Min(a.x, b.x), Min(a.y, b.y), Min(a.z, b.z));
+
+		public static Vec2<T> Max<T>(Vec2<T> a, Vec2<T> b)
+			where T: operator T+T, operator T-T, operator T*T, operator T/T
+			where bool: operator T<T
+				=> .(Max(a.x, b.x), Max(a.y, b.y));
+
+			public static Vec2<T> Min<T>(Vec2<T> a, Vec2<T> b)
+			where T: operator T+T, operator T-T, operator T*T, operator T/T
+			where bool: operator T<T
+				=> .(Min(a.x, b.x), Min(a.y, b.y));
 
 		public static T Max<T>(T a, T b, T c) where bool : operator T < T where T : IIsNaN => Math.Max(Math.Max(a, b), c);
 		public static T Min<T>(T a, T b, T c) where bool : operator T < T where T : IIsNaN => Math.Min(Math.Min(a, b), c);
