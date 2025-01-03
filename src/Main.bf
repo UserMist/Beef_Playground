@@ -69,8 +69,8 @@ class Main : SDLApp
 		addBind("my", .MAxis(1));
 
 		addBind("draw", .MButton(0));
-
-		ioBuffer.Add(IOAxis("radius", 8, 0));
+		addBind("quick_palette", .MButton(2));
+		addBind("radius", .MButton(1));
 
 		ioBuffer.Refresh();
 	}
@@ -104,7 +104,7 @@ class Main : SDLApp
 		}
 		watch.Restart();
 		
-		AssetTools.FinalizeRGB24(Span<RGB>(img.cells.Ptr, img.cells.Count), finalImg.cells.Ptr);
+		AssetTools.FinalizeRGB24(Span<RGB>(img.cells.Ptr, img.cells.Count), finalImg.cells.Ptr, false);
 
 		sdlImage.mTexture = SDL.CreateTextureFromSurface(mRenderer, sdlSurface); defer SDL.DestroyTexture(sdlImage.mTexture);
 		DrawToWindow(sdlImage);

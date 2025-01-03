@@ -15,10 +15,15 @@ class ImageEditor: Subprogram
 	public int2 maxSize;
 	public int strokeTileSize;
 	public Dictionary<int2, uint16[]> strokeTiles = new .() ~ DeleteDictionaryAndValues!(_); //stores currently drawn stroke, each pixel stores biggest proximity to cursor
+	RGB brushColor = .(1f, 1f, 1f);
+	int brushRadius = 3;
 
 	public this() {
 		domain.Add(Camera(default, default));
 		images.Add(new $"0", new .(1000,1000));
+		for (var pixel in ref images["0"].cells) {
+			//pixel.Value = .All(1);
+		}
 		imageKey.Set("0");
 	}
 
@@ -26,35 +31,53 @@ class ImageEditor: Subprogram
 	public override void UpdateIO(float dt, IOConnection io) {
 		double2 cursorPos = io.GetFirstAxis<2>(.("mx", "my"));
 		double2 cursorOldPos = io.GetFirstAxisPrev<2>(.("mx", "my"));
-		let radius = Math.Max(0, (int)io.GetFirstAxis("radius"));
+
+		if (io.GetFirstAxis("radius") > 0) {
+			brushRadius = Math.Max(1, (int) (cursorPos.y * 10));
+		}
 		let draw = io.GetFirstAxis("draw");
+		let palette = io.GetFirstAxis("quick_palette");
+		let paletted = io.GetFirstAxisPrev("quick_palette");
 		let drew = io.GetFirstAxisPrev("draw");
 
-		if (images.GetValue(imageKey) case .Ok(let image)) {
-			/*io.Render(domain, scope (canvas) => {
-				canvas.DrawLine((.)cursorPos, (.)cursorOldPos, RGB(255, 255, 255));
-			});*/
-			maxSize = .(image.width, image.height);
+		delegate RGB(RGB, float) shader = scope (pixel, proximity) => {
+			return Math.Lerp(pixel.Value, brushColor, proximity == 0? 0 : 1);
+		};
 
-			if (draw > 0.5f) {
-				debug(int2(0,0), int2(0,0), 1);
-				//addSubStroke(image.ClipToScreen(.(.(cursorOldPos.x), .(cursorOldPos.y))), image.ClipToScreen(.(.(cursorPos.x), .(cursorPos.y))), radius);
-			} else if (drew > 0.5f) {
-				submitStroke(scope (srcPixel, dist) => *srcPixel = .(1,1,1));
-			}
-
-			io.Render(domain, scope (canvas) => {
+		if (images.GetValue(imageKey) case .Ok(var image)) {
+			io.Render(domain, scope [&](canvas) => {
 				canvas.image.EnsureSize(image.width, image.height);
-				image.CopyTo(canvas.image);
+				maxSize = .(image.width, image.height);
+				strokeTileSize = brushRadius*2+1;
+	
+				if (draw > 0.5f) {
+					addSubStroke(image.ClipToScreen(.(.(cursorOldPos.x), .(cursorOldPos.y))), image.ClipToScreen(.(.(cursorPos.x), .(cursorPos.y))), brushRadius);
+					renderStroke(shader, image, canvas.image);
+				} else if (drew > 0.5f) {
+					renderStroke(shader, image, image);
+					image.CopyTo(canvas.image);
+					for (let v in strokeTiles.Values) delete v;
+					strokeTiles.Clear();
+				}
+
+				if (palette > 0.5f && paletted < 0.5f) {
+					for (let idx < image.cells.Count) {
+						canvas.image.cells[idx] = pickRGB(image.ScreenToClip(.(idx % image.width, idx / image.height)));
+					}
+				} else if (palette < 0.5f && paletted > 0.5f) {
+					brushColor = pickRGB((.)cursorPos.x, (.)cursorPos.y, 1);
+					image.CopyTo(canvas.image);
+				}
 			});
 		}
 	}
 
-	private void drawCircle(Grid2<RGB> image, Vec2<int> pos, int radius) {
-		for (var j = -radius; j <= radius; j++) for (var i = -radius; i <= radius; i++) if (j*j + i*i < radius*radius) {
-			let coord = int2(i,j) + pos;
-			image[coord].Value = Math.Lerp(image[coord].Value, float3(0.5f,0.5f,0.5f), 0.25f);
-		}
+	private static RGB pickRGB(float3 p) {
+		return pickRGB(p.x, p.y, p.z);
+	}
+
+	private static RGB pickRGB(float x, float y, float z) {
+		return .(Math.Max(x,0), Math.Max(y,0), 1);
 	}
 
 	private static void debug(int2 a, int2 b, int r) {
@@ -63,15 +86,15 @@ class ImageEditor: Subprogram
 
 	private void addSubStroke(int2 a, int2 b, int r) {
 		let tileSize = strokeTileSize; //2*r 
-		var cage = Cage2<int>.CreateBounding(a, b);
-		cage.max = (cage.max + .All(r)) / tileSize;
-		cage.min = (cage.min - .All(r)) / tileSize;
-		cage.min = .(Math.Max(cage.min.x, 0), Math.Max(cage.min.y, 0));
-		cage.max = .(Math.Min(cage.min.x, 0), Math.Min(cage.min.y, 0));
+		var max = Math.Max(a, b);
+		var min = Math.Min(a, b);
+		max = (max + .All(r)) / tileSize;
+		min = (min - .All(r)) / tileSize;
+		min = .(Math.Max(min.x, 0), Math.Max(min.y, 0));
 
 		let invR = float(uint16.MaxValue) / r;
 		int2 tilePos = default;
-		for (tilePos.y = cage.min.y; tilePos.y <= cage.max.y; tilePos.y++) for (tilePos.x = cage.min.x; tilePos.x <= cage.max.x; tilePos.x++) {
+		for (tilePos.y = min.y; tilePos.y <= max.y; tilePos.y++) for (tilePos.x = min.x; tilePos.x <= max.x; tilePos.x++) {
 			if (!strokeTiles.ContainsKey(tilePos)) {
 				strokeTiles[tilePos] = new .[tileSize*tileSize];
 			}
@@ -85,26 +108,20 @@ class ImageEditor: Subprogram
 		}
 	}
 
-	private void submitStroke(delegate void(RGB* srcPixel, float dist) shader) {
+	private void renderStroke(delegate RGB(RGB pixel, float proximity) shader, Grid2<RGB> input, Grid2<RGB> output) {
 		let inv = 1f / uint16.MaxValue;
-		if (images.GetValue(imageKey) case .Ok(let image)) {
-			let tileSize = strokeTileSize; //2*r 
+		if (input != null) {
+			let tileSize = strokeTileSize;
 			for (let kv in strokeTiles) {
 				let tilePos = kv.key;
 				let tile = kv.value;
-				let trimmedSize = Math.Min(tilePos * tileSize + int2(tileSize, tileSize), maxSize);
-				let skip = tileSize - trimmedSize.x;
-				let max = trimmedSize.y * tileSize;
-				for (var idx < max) {
-					let p = tilePos * tileSize + int2(idx % tileSize, idx / tileSize);
-					shader(&image[p], 1f - tile[idx]*inv);
-					idx += skip;
+				let firstIdx = tilePos * tileSize;
+				if (firstIdx.x > maxSize.x || firstIdx.y > maxSize.y) continue;
+				let trimmedSize = Math.Min(firstIdx + int2.All(tileSize), maxSize) - firstIdx;
+				for (let j < trimmedSize.y) for (let i < trimmedSize.x) {
+					output[firstIdx + int2(i, j)] = shader(input[firstIdx + int2(i, j)], tile[j*tileSize + i]*inv);
 				}
-				delete tile;
 			}
-		} else for (let v in strokeTiles.Values) {
-			delete v;
 		}
-		strokeTiles.Clear();
 	}
 }

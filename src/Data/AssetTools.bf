@@ -28,13 +28,19 @@ public class AssetTools
 	}
 
 	//todo: linear normalized RGB to sRGB (clamp gamut saturation and peak values to 1, all while preserving perceived saturation+hue. Refer to CIECAM02, LMS colorspace, wide-gamut colorspaces)
-	public static void FinalizeRGB24(Span<RGB> src, uint8* dest) {
+	public static void FinalizeRGB24(Span<RGB> src, uint8* dest, bool accurate) {
 		let c = src.Length;
-		for (let i < c) {
+		if (accurate) for (let i < c) {
 			let p = src[i].Value;
 			dest[i*3 + 0] = toGamma(Math.Clamp(p.x, 0, 1));
 			dest[i*3 + 1] = toGamma(Math.Clamp(p.y, 0, 1));
 			dest[i*3 + 2] = toGamma(Math.Clamp(p.z, 0, 1));
+		}
+		else for (let i < c) {
+			let p = src[i].Value;
+			dest[i*3 + 0] = toDirtyGamma(Math.Clamp(p.x, 0, 1));
+			dest[i*3 + 1] = toDirtyGamma(Math.Clamp(p.y, 0, 1));
+			dest[i*3 + 2] = toDirtyGamma(Math.Clamp(p.z, 0, 1));
 		}
 	}
 

@@ -17,14 +17,6 @@ where bool: operator T<T
 		}
 		return ret;
 	}
-
-	static this() {
-		let a = a(.All(0), .All(1));
-	}
-
-	private static void a(int2 v, int2 v1) {
-		Cage2<int>.CreateBounding(v, v1);
-	}
 }
 
 extension Cage2<T>
